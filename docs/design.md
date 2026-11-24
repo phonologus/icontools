@@ -166,9 +166,10 @@ a semicolon, and `{` is not an Ender and `}` not a Beginner:
   holding its opening bracket.
 - Bodies of `then`, `else`, `do`, `repeat`, `suspend ... do` that start
   on a new line: one level beyond the line holding the keyword.
-- `else` on a new line aligns with its `if` when the `if` begins its line
-  or follows an `else` that does (else-if chains stay flat); otherwise
-  (`x := if ...`) it is a continuation line.
+- `then` or `else` on a new line aligns with its `if` when the `if`
+  begins its line or follows an `else` that does (else-if chains stay
+  flat); otherwise (`x := if ...`) it is a continuation line. Likewise
+  `do` with its `while`/`until`/`every`/`suspend`.
 - Continuation lines: one level beyond the line where their statement
   (or control-structure body) starts.
 - Comments on their own line take the indentation of the following token
@@ -182,11 +183,25 @@ is); no spaces inside brackets or around section operators (`s[i + 1:0]`);
 are never written adjacent if that would lex differently (`- -x` stays
 apart rather than becoming `--x`). Trailing whitespace is removed.
 
-**Alignment** (as gofmt): in a run of consecutive lines with trailing
-comments, the comments start in a common column one space beyond the
-longest code; in a run of consecutive single-line clauses of the same
-`case`, the bodies start in a common column. A clause spanning several
-lines ends the run. (Like gofmt, this can make one long line push a whole
+**Alignment**, applied in this order:
+
+1. In a run of consecutive single-line clauses of the same `case`, the
+   bodies start in a common column (as gofmt aligns key–value pairs). A
+   clause spanning several lines ends the run.
+2. In a run of consecutive lines at the same indentation that end with the
+   same binary operator, the operators start in a common column, as in
+   ```
+   b ||:=
+      fmt_TAG     || # SubChunkID
+      wu32(16r10) || # SubChunkSize
+      wu16(br)       # BitsPerSample
+   ```
+   gofmt has no such rule, and applied blindly it makes one long line push
+   a whole run far right. So it applies only when the author aligned the
+   run: at least one of its operators was preceded by padding (two or more
+   blanks, or a tab) in the source. Otherwise operators get single spaces.
+3. In a run of consecutive lines with trailing comments, the comments
+   start in a common column one space beyond the longest code (as gofmt). (Like gofmt, this can make one long line push a whole
 run of comments to the right; gofmt's heuristics for breaking such runs
 are a possible refinement.)
 

@@ -1,0 +1,19 @@
+procedure riff()
+   b ||:=
+      fmt_TAG     || # SubChunkID
+      wu32(16r10) || # SubChunkSize
+      wu16(br)       # BitsPerSample
+   return text ?
+      tab(find(name)) &
+      (if move(-1) then tab(any(Non_name_char)) else "") &
+      move(*name)
+   if tab(many('# \t')) &
+      tab(many(' \t'))
+   then {
+      x
+   }
+   every temp_name :=
+      pathname(fname, slash) ||
+      "." || right(0 to 999, 3, "0")
+   do close(open(temp_name)) | break
+end

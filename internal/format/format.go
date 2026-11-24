@@ -79,23 +79,29 @@ type printer struct {
 	start   *int  // if set, indentation for the next token if it starts a line
 	cmt     *int  // if set, indentation for comment lines before the next token
 	forceNL bool  // the next token starts a new line
+	markOp  bool  // record the next token as a line-final operator
 
 	marks map[int]*marks // alignment points, by output line
 	cases int            // counter identifying case expressions
 }
 
-// marks records alignment points on an output line: byte offsets of the
-// end of a case label's colon and of the end of the code before a
-// trailing comment (-1 if absent).
+// marks records alignment points on an output line (byte offsets, -1 if
+// absent): the end of a case label's colon; the end of the code before a
+// binary operator that ends the line; and the end of the code before a
+// trailing comment.
 type marks struct {
 	caseAt, caseGroup int
+	opAt              int
+	opText            string
+	opIndent          int
+	opPadded          bool // the source had padding before the operator
 	commentAt         int
 }
 
 func (p *printer) mark(line int) *marks {
 	m := p.marks[line]
 	if m == nil {
-		m = &marks{caseAt: -1, commentAt: -1}
+		m = &marks{caseAt: -1, opAt: -1, commentAt: -1}
 		p.marks[line] = m
 	}
 	return m
@@ -107,6 +113,7 @@ type tok struct {
 	space   bool // separated from the previous token on the same line
 	join    bool // pull onto the previous line if only blank lines intervene
 	newline bool // start a new line even if the source does not
+	markOp  bool // record an operator alignment point before the token
 	comment int  // indentation for comment lines before it (-1: use indent)
 }
 
@@ -130,6 +137,7 @@ func (p *printer) put(t *syntax.Token, sp bool) {
 	if p.forceNL && !t.Implicit {
 		o.newline, p.forceNL = true, false
 	}
+	o.markOp, p.markOp = p.markOp, false
 	p.emit(t, o)
 }
 
@@ -209,8 +217,15 @@ func (p *printer) emit(t *syntax.Token, o tok) {
 	case p.prev == nil:
 		p.lineIndent = 0
 		p.lineFirst = t
-	case o.space || wouldMerge(p.prev, t):
-		p.write(" ")
+	default:
+		if o.markOp {
+			m := p.mark(p.line)
+			m.opAt, m.opText, m.opIndent = p.col(), t.Text, p.lineIndent
+			m.opPadded = padded(t)
+		}
+		if o.space || wouldMerge(p.prev, t) {
+			p.write(" ")
+		}
 	}
 	p.tokLine[t] = p.line
 	p.write(t.Text)
@@ -447,6 +462,7 @@ func (p *printer) expr(x syntax.Expr) {
 		p.expr(x.X)
 	case *syntax.Binary:
 		p.expr(x.X)
+		p.markOp = p.endsLine(x.Op)
 		p.put(x.Op, true)
 		p.next(true)
 		p.expr(x.Y)
@@ -498,9 +514,10 @@ func (p *printer) expr(x syntax.Expr) {
 		before := p.prev
 		p.put(x.If, false)
 		l0 := p.lineIndent
-		// "else" aligns with "if" when the if begins its line, or follows
-		// an "else" that does (an else-if chain). Otherwise
-		// (x := if ..., suspend if ...) it is a continuation line.
+		// "then" and "else" starting a line align with "if" when the if
+		// begins its line, or follows an "else" that does (an else-if
+		// chain). Otherwise (x := if ..., suspend if ...) they are
+		// continuation lines.
 		elseAt := p.cont
 		if p.lineFirst == x.If ||
 			before != nil && before.Kind == token.ELSE && p.lineFirst == before {
@@ -508,6 +525,7 @@ func (p *printer) expr(x syntax.Expr) {
 		}
 		p.next(true)
 		p.expr(x.Cond)
+		p.at(elseAt)
 		p.put(x.Then, true)
 		p.stmt(x.Body, l0+1, true)
 		if x.Else != nil {
@@ -517,20 +535,22 @@ func (p *printer) expr(x syntax.Expr) {
 		}
 	case *syntax.Loop:
 		p.put(x.Keyword, false)
-		l0 := p.lineIndent
+		l0, doAt := p.lineIndent, p.keywordAt(x.Keyword)
 		if x.Cond != nil {
 			p.next(true)
 			p.expr(x.Cond)
 		}
+		p.at(doAt)
 		p.put(x.Do, true)
 		p.stmt(x.Body, l0+1, true)
 	case *syntax.Return:
 		p.put(x.Keyword, false)
-		l0 := p.lineIndent
+		l0, doAt := p.lineIndent, p.keywordAt(x.Keyword)
 		if x.X != nil {
 			p.next(true)
 			p.expr(x.X)
 		}
+		p.at(doAt)
 		p.put(x.Do, true)
 		p.stmt(x.Body, l0+1, true)
 	case *syntax.Break:
@@ -584,6 +604,43 @@ func (p *printer) caseExpr(x *syntax.Case) {
 		}
 	}
 	p.closeBrace(x.Rbrace, outer, multi, true)
+}
+
+// keywordAt returns the indentation for a "do" that starts a line, given
+// the keyword (while, every, suspend, ...) just written: aligned with it if
+// it begins its line, otherwise a continuation line.
+func (p *printer) keywordAt(kw *syntax.Token) int {
+	if p.lineFirst == kw {
+		return p.lineIndent
+	}
+	return p.cont
+}
+
+// padded reports whether t is preceded in the source, on the same line, by
+// more than a single space: a sign of deliberate alignment.
+func padded(t *syntax.Token) bool {
+	for _, tr := range t.Leading {
+		if tr.Kind == lexer.Space && (len(tr.Text) > 1 || strings.Contains(tr.Text, "\t")) {
+			return true
+		}
+	}
+	return false
+}
+
+// endsLine reports whether t is the last token on its source line.
+func (p *printer) endsLine(t *syntax.Token) bool {
+	for i := p.index[t] + 1; i < len(p.toks); i++ {
+		if p.toks[i].Implicit {
+			continue
+		}
+		for _, tr := range p.toks[i].Leading {
+			if tr.Kind == lexer.Newline {
+				return true
+			}
+		}
+		return false
+	}
+	return false
 }
 
 // startsLine reports whether t was written as the first token of a line.

@@ -1,6 +1,7 @@
 package format
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -11,6 +12,10 @@ import (
 //
 //   - In a run of consecutive lines holding single-line case clauses of the
 //     same case expression, the clause bodies start in a common column.
+//   - In a run of consecutive lines at the same indentation that end with
+//     the same binary operator (as in a chain "a ||" / "b ||" / ...), the
+//     operators start in a common column, if the author aligned them (any
+//     of them was preceded by padding in the source).
 //   - In a run of consecutive lines with trailing comments, the comments
 //     start in a common column, one space beyond the longest code.
 //
@@ -45,6 +50,42 @@ func (p *printer) align(out string) string {
 		}
 	})
 
+	// Line-final binary operators.
+	groups := map[string]int{}
+	runs(ls, func(l int) (int, bool) {
+		m := p.marks[l]
+		if m.opAt < 0 || !endsWithOp(lines[l], m) {
+			return 0, false
+		}
+		key := fmt.Sprint(m.opIndent, " ", m.opText)
+		if _, ok := groups[key]; !ok {
+			groups[key] = len(groups) + 1
+		}
+		return groups[key], true
+	}, func(run []int) {
+		// Align only runs the author aligned: at least two lines, at
+		// least one of which had padding before its operator.
+		deliberate := false
+		for _, l := range run {
+			deliberate = deliberate || p.marks[l].opPadded
+		}
+		if len(run) < 2 || !deliberate {
+			return
+		}
+		w := 0
+		for _, l := range run {
+			w = max(w, width(lines[l][:p.marks[l].opAt]))
+		}
+		for _, l := range run {
+			m := p.marks[l]
+			old := lines[l]
+			lines[l] = pad(old, m.opAt, w)
+			if m.commentAt > m.opAt {
+				m.commentAt += len(lines[l]) - len(old)
+			}
+		}
+	})
+
 	// Trailing comments.
 	runs(ls, func(l int) (int, bool) {
 		return 0, p.marks[l].commentAt >= 0
@@ -58,6 +99,16 @@ func (p *printer) align(out string) string {
 		}
 	})
 	return strings.Join(lines, "\n")
+}
+
+// endsWithOp reports whether the operator recorded in m is the last code
+// on the line (it may not be, if a following "{" was joined to the line).
+func endsWithOp(line string, m *marks) bool {
+	end := len(line)
+	if m.commentAt >= 0 {
+		end = m.commentAt
+	}
+	return m.opAt <= end && strings.TrimSpace(line[m.opAt:end]) == m.opText
 }
 
 // runs calls f for each maximal run of consecutive line numbers in ls that
