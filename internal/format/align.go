@@ -13,8 +13,9 @@ import (
 //   - In a run of consecutive lines holding single-line case clauses of the
 //     same case expression, the clause bodies start in a common column.
 //   - In a run of consecutive lines at the same indentation, each holding
-//     a single-line assignment statement, the assignment operators start in
-//     a common column, if the author aligned them.
+//     a single-line assignment statement, the assignment operators are
+//     aligned on their ":" (so ":=" and "+:=" line up on ":="), if the
+//     author aligned them.
 //   - In a run of consecutive lines at the same indentation that end with
 //     the same binary operator (as in a chain "a ||" / "b ||" / ...), the
 //     operators start in a common column, if the author aligned them (any
@@ -66,14 +67,17 @@ func (p *printer) align(out string) string {
 		if len(run) < 2 || !deliberate {
 			return
 		}
-		w := 0
+		// Align the anchor of each operator: its ":" (so that "+:=" and
+		// ":=" line up on ":="), or its first character for "<-", "<->".
+		col := 0
 		for _, l := range run {
-			w = max(w, width(lines[l][:p.marks[l].assignAt]))
+			m := p.marks[l]
+			col = max(col, width(lines[l][:m.assignAt])+1+m.assignAnchor)
 		}
 		for _, l := range run {
 			m := p.marks[l]
 			old := lines[l]
-			lines[l] = pad(old, m.assignAt, w)
+			lines[l] = padTo(old, m.assignAt, col-m.assignAnchor)
 			d := len(lines[l]) - len(old)
 			if m.opAt > m.assignAt {
 				m.opAt += d
@@ -176,6 +180,13 @@ func runs(ls []int, has func(int) (group int, ok bool), f func([]int)) {
 func pad(line string, at, w int) string {
 	rest := strings.TrimLeft(line[at:], " \t")
 	return line[:at] + strings.Repeat(" ", w-width(line[:at])+1) + rest
+}
+
+// padTo replaces the blanks at offset at in line so that the text after
+// them starts at column col (0-based).
+func padTo(line string, at, col int) string {
+	rest := strings.TrimLeft(line[at:], " \t")
+	return line[:at] + strings.Repeat(" ", col-width(line[:at])) + rest
 }
 
 // width returns the display width of s, counting each rune (or invalid

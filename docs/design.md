@@ -190,10 +190,13 @@ apart rather than becoming `--x`). Trailing whitespace is removed.
    clause spanning several lines ends the run.
 2. In a run of consecutive lines at the same indentation, each holding a
    complete single-line assignment statement (`:=`, `:=:`, `<-`, `<->`, or
-   an augmented `op:=`), the operators start in a common column:
+   an augmented `op:=`), the operators are aligned on their `:` (on the
+   first character for `<-` and `<->`), so augmented assignments line up
+   with plain ones on `:=`:
    ```
    files       := before(files, param[i + 1])
-   i           +:= 1
+   i          +:= 1
+   s         ||:= t
    longer_name := f(x)
    ```
    This is Icon's nearest equivalent to the tables gofmt aligns in Go

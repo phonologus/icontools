@@ -7,6 +7,9 @@ procedure main()
    i   +:= 1
    n := 0             # aligned run, with comments
    longer_name := f(x)
+   s ||:= t
+   a :=: b
+   q <-> r
 
    fmt_TAG     := "fmt "
    s := "a long \

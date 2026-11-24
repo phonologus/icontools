@@ -102,6 +102,7 @@ type marks struct {
 	opPadded          bool // the source had padding before the operator
 	assignAt          int  // before the operator of an assignment statement
 	assignIndent      int
+	assignAnchor      int // offset within the operator of the column to align
 	assignPadded      bool
 	commentAt         int
 }
@@ -236,6 +237,7 @@ func (p *printer) emit(t *syntax.Token, o tok) {
 		if o.markAssign {
 			m := p.mark(p.line)
 			m.assignAt, m.assignIndent = p.col(), p.lineIndent
+			m.assignAnchor = max(strings.IndexByte(t.Text, ':'), 0)
 			m.assignPadded = padded(t)
 		}
 		if o.space || wouldMerge(p.prev, t) {
