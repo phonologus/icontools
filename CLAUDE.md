@@ -13,6 +13,8 @@ Aim for small, working increments.
   only on hand-written snippets.
 - Standard library only unless there is a strong reason; discuss new
   dependencies first.
-- Git: commit locally; push to origin only when the owner asks. The push
-  token is in `../git/pat` — pass it per command via an inline credential
-  helper; never print it or store it in config or URLs.
+- Git: commit locally; push to origin only when the owner asks. Push
+  tokens are per repository: `../git/icontools` and
+  `../git/tree-sitter-icon` — pass the right one per command via an inline
+  credential helper (with `credential.helper=` first, to bypass the
+  keychain); never print a token or store it in config or URLs.

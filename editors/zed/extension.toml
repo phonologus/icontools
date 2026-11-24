@@ -7,10 +7,8 @@ description = "Icon programming language: highlighting, outline, and the iconls 
 repository = "https://github.com/phonologus/icontools"
 
 [grammars.icon]
-# During development this points at a local clone; it will become
-# https://github.com/phonologus/tree-sitter-icon once published.
-repository = "file:///Users/sean/user/tmp/claude/tree-sitter-icon"
-rev = "78c677439f1adf413078927518837b47ae585dd7"
+repository = "https://github.com/phonologus/tree-sitter-icon"
+rev = "6070fd31e361ac44d34b14ba2135f37f7120e194"
 
 [language_servers.iconls]
 name = "iconls"
