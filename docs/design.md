@@ -260,3 +260,26 @@ do not parse as a whole are refused).
   supports it, else flattened.
 - **Formatting**: icfmt; a single edit covering just the changed lines.
   Files with syntax errors are not formatted.
+
+## Name resolution (`internal/sema`)
+
+Follows icont (`tsym.c`, `lsym.c`, `lglob.c`). Within a procedure an
+identifier is, in order: a parameter, local or static; a global (`global`,
+procedure or record, in any linked file); a built-in function (a global of
+the same name hides it); otherwise an implicit local, which `icont -u`
+reports as an "undeclared identifier". Field names in `x.f` may denote
+any record's field of that name.
+
+Diagnostics, as icont: `redeclared identifier` (a name declared twice in
+one procedure), `inconsistent redeclaration` (two procedures/records of
+the same name, at the later one; a `global` may share a name with a
+procedure or record), `invalid keyword`, and, as warnings, undeclared
+identifiers (suppressed when some linked file cannot be found).
+
+Unlike icont, undeclared identifiers are reported in every procedure: the
+icont linker first discards procedures unreachable from `main` or an
+`invocable` declaration, so it reports only reachable ones.
+
+Verified with `icont -s -u` on the 561 corpus files that stand alone (no
+`link`), comparing only reachable procedures, and ignoring graphics
+functions (the oracle's icont is built without graphics).

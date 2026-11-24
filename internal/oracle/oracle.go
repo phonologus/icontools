@@ -148,3 +148,18 @@ func (o *Oracle) run(s Source, flag string) ([]byte, []string, bool) {
 	}
 	return out, msgs, err == nil
 }
+
+// Icont runs icont with args in directory dir, with the IPL include
+// directories on the search path, and returns its diagnostic output.
+// ok is false if icont exits with an error.
+func (o *Oracle) Icont(dir string, args ...string) (stderr string, ok bool) {
+	cmd := exec.Command(o.icont, args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "LPATH="+
+		filepath.Join(o.Root, "ipl", "incl")+" "+filepath.Join(o.Root, "ipl", "gincl"))
+	var b strings.Builder
+	cmd.Stderr = &b
+	cmd.Stdout = &b
+	err := cmd.Run()
+	return b.String(), err == nil
+}
