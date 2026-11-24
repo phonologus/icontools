@@ -86,3 +86,10 @@ ICONTOK=$(tools/icontok/build.sh) MUTATIONS=30000 go test -run Mutations ./inter
 
 `build.sh` copies the reference tree to a scratch directory (default
 `$TMPDIR/icontok-build`) and builds there, so `../icon` is never modified.
+
+## Licence
+
+MIT; see `LICENSE`. The catalogue of built-in functions and keywords
+(`internal/builtin/catalog_gen.go`) is generated from the Icon sources,
+which are in the public domain. Documentation from the Icon website is not
+included: `iconls fetch-docs` downloads it to a local cache.
