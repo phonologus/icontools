@@ -281,13 +281,12 @@ predefined `_UNIX` etc.) take precedence over everything, as icont
 substitutes them before parsing; each is in force from its `$define` (or
 the `$include`) to a `$undef` or redefinition.
 
-One check icont does not make: assigning to a procedure, record
-constructor or built-in function (`left := f`) is reported as a warning,
-since it replaces that function throughout the program. It is legal and
-occasionally deliberate (the IPL has idioms like `InitProc := 1` to make
-a procedure a no-op), but more often a mistake: in the corpus it fires
-136 times in 70 of 1,200 files, mostly variables named `name`, `pos` or
-`key` that silently replace those built-ins.
+One check icont does not make: assigning to a built-in function
+(`name := ...`) is reported as a warning, since it replaces that function
+throughout the program; usually it is a variable that happens to share
+the function's name. Assigning to procedures and record constructors is
+an Icon idiom (e.g. `InitProc := 1` to make a procedure a no-op, or
+swapping procedures with `:=:`) and is not reported.
 
 Unlike icont, undeclared identifiers are reported in every procedure: the
 icont linker first discards procedures unreachable from `main` or an

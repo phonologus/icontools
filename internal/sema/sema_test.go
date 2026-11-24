@@ -333,3 +333,28 @@ func stripLines(ss []string) []string {
 	}
 	return out
 }
+
+func TestAssignToBuiltin(t *testing.T) {
+	p, files := program(t, `procedure main()
+   local f
+   name := 1
+   pos :=: f
+   helper := write
+   point := 2
+end
+procedure helper()
+end
+record point(x)
+`)
+	var msgs []string
+	for _, d := range p.Resolve(files[0]).Diagnostics {
+		msgs = append(msgs, d.Msg)
+	}
+	want := []string{
+		`assignment to built-in function "name" replaces it throughout the program`,
+		`assignment to built-in function "pos" replaces it throughout the program`,
+	}
+	if !slices.Equal(msgs, want) {
+		t.Errorf("diagnostics:\n%q\nwant\n%q", msgs, want)
+	}
+}

@@ -448,16 +448,13 @@ func (r *resolver) expr(x syntax.Expr) {
 	case *syntax.Binary:
 		r.expr(x.X)
 		r.expr(x.Y)
-		// Assigning to a procedure, record constructor or built-in
-		// function is legal, but replaces it throughout the program:
-		// usually a mistake (e.g. "left := f" for "f.left := f").
+		// Assigning to a built-in function is legal, but replaces it
+		// throughout the program: usually a variable that happens to share
+		// its name (e.g. "name" or "pos"). Assigning to procedures and
+		// record constructors is an Icon idiom, so is not reported.
 		if id, ok := x.X.(*syntax.Ident); ok && id.Name != nil && x.Op != nil && isAssignOp(x.Op.Kind) {
-			if s := r.info.Uses[id.Name]; s != nil {
-				switch s.Kind {
-				case Procedure, Record, Builtin:
-					what := map[Kind]string{Procedure: "procedure", Record: "record constructor", Builtin: "built-in function"}[s.Kind]
-					r.errorf(id.Name, Warning, "assignment to %s %q replaces it throughout the program", what, s.Name)
-				}
+			if s := r.info.Uses[id.Name]; s != nil && s.Kind == Builtin {
+				r.errorf(id.Name, Warning, "assignment to built-in function %q replaces it throughout the program", s.Name)
 			}
 		}
 	case *syntax.Field:
