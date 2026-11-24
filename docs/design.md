@@ -162,8 +162,11 @@ a semicolon, and `{` is not an Ender and `}` not a Beginner:
 - `{ ... }` and `case ... of { ... }`: contents one level beyond the line
   holding `{`; the closing `}` at the indentation of that line (Go style),
   so `} else {` falls out naturally.
-- A closing `)` or `]` that starts a line is indented like the line
-  holding its opening bracket.
+- Bracketed lists (call arguments, `[...]`, `(...)`, PDCO `{...}`): as
+  in Go, if the opening bracket ends its line, the contents are indented
+  one level beyond the line holding it, so nested calls written one per
+  line indent progressively; a closing bracket that starts a line is
+  indented like the line holding its opening bracket.
 - Bodies of `then`, `else`, `do`, `repeat`, `suspend ... do` that start
   on a new line: one level beyond the line holding the keyword.
 - `then` or `else` on a new line aligns with its `if` when the `if`

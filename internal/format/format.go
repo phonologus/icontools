@@ -444,12 +444,18 @@ func (p *printer) exprs(l syntax.List[syntax.Expr]) {
 	}
 }
 
-// bracketed writes open, the list, and close. If close starts a line it
-// is indented like the line holding open (as in Go).
+// bracketed writes open, the list, and close. As in Go, if open ends its
+// line, the contents are indented one level beyond the line holding open;
+// and if close starts a line it is indented like the line holding open.
 func (p *printer) bracketed(open *syntax.Token, l syntax.List[syntax.Expr], close *syntax.Token) {
 	p.put(open, false)
 	outer := p.lineIndent
+	saveCont := p.cont
+	if p.endsLine(open) {
+		p.cont = outer + 1
+	}
 	p.exprs(l)
+	p.cont = saveCont
 	p.at(outer)
 	p.put(close, false)
 }

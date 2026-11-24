@@ -1,0 +1,15 @@
+procedure main()
+   return LAB_to_MSH(
+      XYZ_to_LAB(
+         linearRGB_to_XYZ(
+            sRGB_to_linearRGB(C)
+         )
+      )
+   )
+   days := [
+      0,
+      2678400
+   ]
+   x := f(a,
+      b)
+end
