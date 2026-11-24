@@ -1,0 +1,17 @@
+id = "icon"
+name = "Icon"
+version = "0.1.0"
+schema_version = 1
+authors = ["phonologus"]
+description = "Icon programming language: highlighting, outline, and the iconls language server (diagnostics, hover, go to definition, references, completion, rename, formatting)."
+repository = "https://github.com/phonologus/icontools"
+
+[grammars.icon]
+# During development this points at a local clone; it will become
+# https://github.com/phonologus/tree-sitter-icon once published.
+repository = "file:///Users/sean/user/tmp/claude/tree-sitter-icon"
+rev = "78c677439f1adf413078927518837b47ae585dd7"
+
+[language_servers.iconls]
+name = "iconls"
+languages = ["Icon"]
