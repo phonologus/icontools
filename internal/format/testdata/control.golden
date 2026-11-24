@@ -1,0 +1,20 @@
+procedure main()
+   if a then b
+   else if c then d
+   else if e then {
+      f
+      }
+   else g
+   x := if a then b
+      else c
+   suspend if i = 1 then !s
+      else s[1:2]
+   while x do {
+      y
+      }
+   every i := 1 to 10 do
+      every j := 1 to i do
+         write(i, j)
+   return map(left(a, 2 * b), left(c, b) ||
+      left(d, b), s)
+end

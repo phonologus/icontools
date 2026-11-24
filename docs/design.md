@@ -135,3 +135,51 @@ same form (`icontree_test.go`, mirroring the action macros in
 - `TestMutations`: random token deletions, duplications and swaps applied
   to corpus files (`MUTATIONS=n`, default 300). In a 30,000-mutant run,
   icont and we agreed on validity and trees in every case.
+
+## Formatter (`icfmt`)
+
+Style is that of the Icon Program Library.
+
+**Line breaks are the programmer's.** Like gofmt, icfmt keeps every line
+break in the source (collapsing runs of blank lines to one) and normalises
+indentation and spacing. With no line-length limit it never needs to add
+a newline, which is what would be dangerous under semicolon insertion.
+The one newline it removes is before an opening `{` (block or `case`),
+which is pulled up onto the previous line (`do\n{` → `do {`) unless the
+token before it is a semicolon, explicit or implicit. Since a newline
+before `{` can only matter by inserting a semicolon, this cannot change
+the token stream.
+
+**Indentation** (3 spaces per level):
+
+- Procedure body, `local`, `static`, `initial`: one level; `end` at 0.
+- `{ ... }`: contents and the closing `}` one level beyond the line
+  holding the `{` (IPL style); likewise `case ... of { ... }` clauses.
+- Bodies of `then`, `else`, `do`, `repeat`, `suspend ... do` that start
+  on a new line: one level beyond the line holding the keyword
+  (`if`/`while`/...).
+- `else` on a new line aligns with its `if` when the `if` begins its line
+  or follows an `else` that does (else-if chains stay flat); otherwise
+  (`x := if ...`) it is a continuation line.
+- Continuation lines: one level beyond the line where their statement
+  (or control-structure body) starts.
+- Comments on their own line take the indentation of the following token
+  (body level before `end`), except comments that start in column 0,
+  which stay there. Directives always stay in column 0.
+
+**Spacing**: binary operators (including `:=`, `to`, `by`, `&`, `|`, `?`)
+are surrounded by spaces; unary operators are not followed by one (`not`
+is); no spaces inside brackets or around section operators (`s[i + 1:0]`);
+`, ` and `; ` are followed by a space; `case` labels by `: `. Two tokens
+are never written adjacent if that would lex differently (`- -x` stays
+apart rather than becoming `--x`). Trailing comments keep the whitespace
+that preceded them; trailing whitespace is removed.
+
+**Safety checks** (`internal/format` tests, over the whole corpus): the
+output has the same significant token stream as the input, including
+implicit semicolons; every comment and directive is preserved; and
+formatting is idempotent.
+
+Possible refinements: aligning `case` clause bodies and runs of trailing
+comments (as gofmt aligns), and handling inactive `$ifdef` regions (files
+whose preprocessor branches do not parse as a whole are refused).

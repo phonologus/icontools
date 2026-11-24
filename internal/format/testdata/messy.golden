@@ -1,0 +1,25 @@
+# a test
+procedure main(args[])
+   local x, y
+   static z
+   initial z := 0
+   x := 1 + 2 * 3
+   if x > 3 then write("big")
+   else {
+      write("small")   # trailing
+      y := -x
+      }
+   every i := 1 to 10 by 2 do { write(i); write(i * i) }
+   s ? { while tab(upto(&letters)) do
+      count +:= *tab(many(&letters))
+      }
+
+   case x of {
+      1: write("one")
+      default: write("other")
+      }
+   z := f(a,
+      b, c) || g(x)[2:3] ||
+      h(y)
+   return - -x
+end

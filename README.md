@@ -30,6 +30,20 @@ Tests use a clone of <https://github.com/gtownsend/icon> as ground truth
 It is found at `$ICON_SRC`, or `../icon` relative to this repository. Tests
 that need it are skipped if it is absent.
 
+## Using icfmt
+
+```sh
+go install ./cmd/icfmt
+icfmt file.icn          # print formatted file
+icfmt -d file.icn       # show a diff
+icfmt -l dir/           # list files that would change
+icfmt -w file.icn       # rewrite in place
+```
+
+icfmt keeps your line breaks and normalises indentation and spacing to the
+style of the Icon Program Library. It never changes the token sequence
+icont sees, and refuses files with syntax errors. See `docs/design.md`.
+
 ## Development
 
 ```sh
