@@ -1,0 +1,112 @@
+{
+  "name": "icon-language",
+  "displayName": "Icon",
+  "description": "Icon programming language: highlighting, diagnostics, hover documentation, go to definition, references, completion, rename and formatting (iconls).",
+  "version": "0.1.0",
+  "publisher": "phonologus",
+  "author": "Sean Jensen",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/phonologus/icontools",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Linters"
+  ],
+  "keywords": [
+    "icon",
+    "icn",
+    "language server"
+  ],
+  "main": "./out/src/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "languages": [
+      {
+        "id": "icon",
+        "aliases": [
+          "Icon"
+        ],
+        "extensions": [
+          ".icn"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "icon",
+        "scopeName": "source.icon",
+        "path": "./syntaxes/icon.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Icon",
+      "properties": {
+        "icon.server.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the `iconls` language server. If empty, `iconls` is found on the `PATH`. Install it with `go install github.com/phonologus/icontools/cmd/iconls@latest`."
+        },
+        "icon.ipath": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Directories in which to find the sources of linked files (`link` declarations), e.g. the Icon Program Library's `procs` and `gprocs` directories. `$IPATH` and `$LPATH` are also searched."
+        },
+        "iconls.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace the communication between VS Code and iconls (in the Output panel)."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "[icon]": {
+        "editor.formatOnSave": true,
+        "editor.tabSize": 3,
+        "editor.insertSpaces": true,
+        "editor.detectIndentation": false
+      }
+    },
+    "commands": [
+      {
+        "command": "icon.restartServer",
+        "title": "Icon: Restart Language Server"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "node scripts/gen-grammar.js && tsc -p .",
+    "test:unit": "npm run compile && mocha --ui tdd out/test/unit/*.test.js",
+    "test": "npm run test:unit && node ./out/test/runTest.js",
+    "package": "npm run compile && vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "10.1.2"
+  },
+  "devDependencies": {
+    "@types/mocha": "10.0.10",
+    "@types/node": "22.15.3",
+    "@types/vscode": "1.91.0",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "4.0.0",
+    "mocha": "12.0.3",
+    "typescript": "6.0.3",
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.2.0"
+  }
+}

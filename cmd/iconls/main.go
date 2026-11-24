@@ -36,6 +36,9 @@ func main() {
 	logFile := flag.String("log", "", "write server log to `file` (default: standard error)")
 	docsDir := flag.String("docs", "", "read reference pages from `dir` (default: the fetch-docs cache)")
 	version := flag.Bool("version", false, "print version and exit")
+	// Many LSP clients (e.g. vscode-languageclient) pass --stdio; standard
+	// input and output are the only transport, so it is accepted and ignored.
+	flag.Bool("stdio", true, "communicate over standard input and output (the default and only transport)")
 	flag.Parse()
 	if *version {
 		fmt.Println("iconls", lsp.Version)

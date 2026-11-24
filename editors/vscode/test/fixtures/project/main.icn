@@ -1,0 +1,6 @@
+procedure main()
+  local p
+  p := area(3)
+  write(&subject, p)
+  undeclared := 1
+end

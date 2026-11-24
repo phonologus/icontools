@@ -1,0 +1,4 @@
+# area returns the area of a square of side s.
+procedure area(s)
+   return s * s
+end

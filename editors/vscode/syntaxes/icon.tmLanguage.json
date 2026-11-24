@@ -1,0 +1,159 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Icon",
+  "scopeName": "source.icon",
+  "fileTypes": [
+    "icn"
+  ],
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#preprocessor"
+    },
+    {
+      "include": "#declaration"
+    },
+    {
+      "include": "#expression"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.icon",
+      "match": "#.*$"
+    },
+    "preprocessor": {
+      "name": "meta.preprocessor.icon",
+      "match": "^\\s*(\\$\\s*[A-Za-z_]\\w*)(.*)$",
+      "captures": {
+        "1": {
+          "name": "keyword.control.directive.icon"
+        }
+      }
+    },
+    "declaration": {
+      "patterns": [
+        {
+          "match": "\\b(procedure)\\s+([A-Za-z_]\\w*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.function.icon"
+            },
+            "2": {
+              "name": "entity.name.function.icon"
+            }
+          }
+        },
+        {
+          "match": "\\b(record)\\s+([A-Za-z_]\\w*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.record.icon"
+            },
+            "2": {
+              "name": "entity.name.type.icon"
+            }
+          }
+        },
+        {
+          "name": "keyword.other.icon",
+          "match": "\\b(end|link|invocable)\\b"
+        },
+        {
+          "name": "storage.modifier.icon",
+          "match": "\\b(global|local|static|initial)\\b"
+        }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "name": "string.quoted.double.icon",
+          "begin": "\"",
+          "end": "\"|(?<![_\\\\\\n])$",
+          "patterns": [
+            {
+              "name": "constant.character.escape.icon",
+              "match": "\\\\(\\^.|[0-7]{1,3}|x[0-9A-Fa-f]{1,2}|.)"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.cset.icon",
+          "begin": "'",
+          "end": "'|(?<![_\\\\\\n])$",
+          "patterns": [
+            {
+              "name": "constant.character.escape.icon",
+              "match": "\\\\(\\^.|[0-7]{1,3}|x[0-9A-Fa-f]{1,2}|.)"
+            }
+          ]
+        },
+        {
+          "name": "keyword.control.icon",
+          "match": "\\b(if|then|else|case|of|default|while|until|every|repeat|do|break|next|return|suspend|fail|create)\\b"
+        },
+        {
+          "name": "keyword.operator.word.icon",
+          "match": "\\b(not|to|by)\\b"
+        },
+        {
+          "name": "variable.language.keyword.icon",
+          "match": "&[A-Za-z_]\\w*"
+        },
+        {
+          "name": "constant.numeric.icon",
+          "match": "\\b[0-9]+[rR][0-9A-Za-z]+\\b|\\b[0-9]+\\.[0-9]*([eE][+-]?[0-9]+)?|\\.[0-9]+([eE][+-]?[0-9]+)?\\b|\\b[0-9]+([eE][+-]?[0-9]+)?\\b"
+        },
+        {
+          "match": "\\b(Active|Alert|Bg|Clip|Clone|Color|ColorValue|CopyArea|Couple|DrawArc|DrawCircle|DrawCurve|DrawImage|DrawLine|DrawPoint|DrawPolygon|DrawRectangle|DrawSegment|DrawString|EraseArea|Event|Fg|FillArc|FillCircle|FillPolygon|FillRectangle|Font|FreeColor|GotoRC|GotoXY|Lower|NewColor|PaletteChars|PaletteColor|PaletteKey|Pattern|Pending|Pixel|QueryPointer|Raise|ReadImage|TextWidth|Uncouple|WAttrib|WDefault|WFlush|WSync|WinButton|WinColorDialog|WinEditRegion|WinFontDialog|WinMenuBar|WinOpenDialog|WinPlayMedia|WinSaveDialog|WinScrollBar|WinSelectDialog|WriteImage|abs|acos|any|args|asin|atan|bal|center|char|chdir|close|collect|copy|cos|cset|delay|delete|detab|display|dtor|entab|errorclear|exit|exp|fattrib|find|flush|function|get|getch|getche|getenv|iand|icom|image|insert|integer|ior|ishift|ixor|kbhit|key|left|list|loadfunc|log|many|map|match|member|move|name|numeric|open|ord|pop|pos|proc|pull|push|put|read|reads|real|remove|rename|repl|reverse|right|rtod|runerr|seek|seq|serial|set|sin|sort|sortf|sqrt|stop|string|system|tab|table|tan|trim|type|upto|variable|where|write|writes)\\s*(?=\\()",
+          "captures": {
+            "1": {
+              "name": "support.function.builtin.icon"
+            }
+          }
+        },
+        {
+          "match": "\\b([A-Za-z_]\\w*)\\s*(?=[({])",
+          "captures": {
+            "1": {
+              "name": "entity.name.function.call.icon"
+            }
+          }
+        },
+        {
+          "match": "(\\.)\\s*([A-Za-z_]\\w*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.icon"
+            },
+            "2": {
+              "name": "variable.other.member.icon"
+            }
+          }
+        },
+        {
+          "name": "keyword.operator.assignment.icon",
+          "match": ":=:|<->|<-|(\\|\\|\\||\\|\\||--|\\+\\+|\\*\\*|~===|~==|~=|===|==|>>=|>>|<<=|<<|>=|<=|[-+*/%^=<>?&@|])?:="
+        },
+        {
+          "name": "keyword.operator.icon",
+          "match": "\\|\\|\\||\\|\\||~===|~==|~=|===|==|>>=|>>|<<=|<<|>=|<=|\\*\\*|\\+\\+|--|\\+:|-:|[-+*/%^=<>?&@!|\\\\~.]"
+        },
+        {
+          "name": "punctuation.separator.icon",
+          "match": "[,;:]"
+        },
+        {
+          "name": "variable.other.icon",
+          "match": "[A-Za-z_]\\w*"
+        }
+      ]
+    }
+  }
+}
