@@ -16,6 +16,18 @@ go install github.com/phonologus/icontools/cmd/iconls@latest
 iconls fetch-docs   # optional: full documentation for built-ins on hover
 ```
 
+To format with icfmt when saving, turn on format-on-save for Icon in
+Zed's `settings.json` (Zed's default is off, and an extension cannot
+change that). `editor: format` works without it.
+
+```json
+"languages": {
+  "Icon": { "format_on_save": "on" }
+}
+```
+
+Files with syntax errors are not formatted (as with gofmt).
+
 Optional settings (Zed `settings.json`):
 
 ```json
