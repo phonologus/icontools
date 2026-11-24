@@ -40,8 +40,9 @@ icfmt -l dir/           # list files that would change
 icfmt -w file.icn       # rewrite in place
 ```
 
-icfmt keeps your line breaks and normalises indentation and spacing to the
-style of the Icon Program Library. It never changes the token sequence
+icfmt keeps your line breaks and normalises indentation and spacing: IPL
+indentation and spacing, with gofmt-style closing braces and alignment of
+trailing comments and case clauses. It never changes the token sequence
 icont sees, and refuses files with syntax errors. See `docs/design.md`.
 
 ## Development

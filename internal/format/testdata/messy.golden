@@ -6,18 +6,19 @@ procedure main(args[])
    x := 1 + 2 * 3
    if x > 3 then write("big")
    else {
-      write("small")   # trailing
+      write("small") # trailing
       y := -x
-      }
+   }
    every i := 1 to 10 by 2 do { write(i); write(i * i) }
-   s ? { while tab(upto(&letters)) do
-      count +:= *tab(many(&letters))
-      }
+   s ? {
+      while tab(upto(&letters)) do
+         count +:= *tab(many(&letters))
+   }
 
    case x of {
-      1: write("one")
+      1:       write("one")
       default: write("other")
-      }
+   }
    z := f(a,
       b, c) || g(x)[2:3] ||
       h(y)

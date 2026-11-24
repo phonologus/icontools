@@ -1,5 +1,5 @@
-// Command icfmt formats Icon source code in the style of the Icon Program
-// Library.
+// Command icfmt formats Icon source code: Icon Program Library indentation
+// and spacing, with gofmt-style closing braces and alignment.
 //
 // Usage:
 //
@@ -8,8 +8,8 @@
 // With no paths it reads standard input and writes standard output. Paths
 // may be files or directories (searched recursively for .icn files).
 //
-// Like gofmt, icfmt keeps the programmer's line breaks and normalises
-// indentation and spacing. It never changes the token sequence that icont
+// Like gofmt, icfmt keeps the programmer's line breaks (except around
+// braces) and normalises indentation and spacing. It never changes the token sequence that icont
 // sees, and it refuses to format files with syntax errors.
 package main
 

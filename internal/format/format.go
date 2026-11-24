@@ -31,7 +31,12 @@ func Source(src []byte) ([]byte, error) {
 
 // File formats a parsed file, which must be free of errors.
 func File(f *syntax.File) string {
-	p := &printer{toks: f.Tokens, index: map[*syntax.Token]int{}}
+	p := &printer{
+		toks:    f.Tokens,
+		index:   map[*syntax.Token]int{},
+		tokLine: map[*syntax.Token]int{},
+		marks:   map[int]*marks{},
+	}
 	for i := range f.Tokens {
 		p.index[&f.Tokens[i]] = i
 	}
@@ -39,24 +44,30 @@ func File(f *syntax.File) string {
 		p.decl(d)
 	}
 	p.emit(f.EOF, tok{indent: 0})
-	out := strings.TrimRight(p.b.String(), " \t\n")
+	out := p.align(p.b.String())
+	out = strings.TrimRight(out, " \t\n")
 	if out == "" {
 		return ""
 	}
 	return out + "\n"
 }
 
-// printer writes tokens, deciding for each whether it starts a new line
-// (only where the source has one), its indentation if so, and the spacing
-// before it if not.
+// printer writes tokens, deciding for each whether it starts a new line,
+// its indentation if so, and the spacing before it if not. Line breaks are
+// those of the source, except that a lone "{" may be joined to the
+// previous line and multi-line blocks get their contents and closing
+// brace on lines of their own (see block).
 type printer struct {
 	toks  []syntax.Token
 	index map[*syntax.Token]int // position of each token in toks
 
 	b          strings.Builder
-	prev       *syntax.Token // last token written
+	line       int // current output line (0-based)
+	lineStart  int // offset in b of the current line
+	prev       *syntax.Token
 	lineIndent int           // indentation of the current output line
 	lineFirst  *syntax.Token // first token on the current output line
+	tokLine    map[*syntax.Token]int
 
 	// Frame of the innermost statement: continuation lines are indented
 	// to cont. setCont is set until the statement's first token has been
@@ -64,8 +75,30 @@ type printer struct {
 	cont    int
 	setCont bool
 
-	space *bool // if set, overrides the spacing of the next token written
-	start *int  // if set, indentation for the next token if it starts a line
+	space   *bool // if set, overrides the spacing of the next token written
+	start   *int  // if set, indentation for the next token if it starts a line
+	cmt     *int  // if set, indentation for comment lines before the next token
+	forceNL bool  // the next token starts a new line
+
+	marks map[int]*marks // alignment points, by output line
+	cases int            // counter identifying case expressions
+}
+
+// marks records alignment points on an output line: byte offsets of the
+// end of a case label's colon and of the end of the code before a
+// trailing comment (-1 if absent).
+type marks struct {
+	caseAt, caseGroup int
+	commentAt         int
+}
+
+func (p *printer) mark(line int) *marks {
+	m := p.marks[line]
+	if m == nil {
+		m = &marks{caseAt: -1, commentAt: -1}
+		p.marks[line] = m
+	}
+	return m
 }
 
 // tok describes how to place one token.
@@ -73,25 +106,31 @@ type tok struct {
 	indent  int  // indentation if the token starts a line
 	space   bool // separated from the previous token on the same line
 	join    bool // pull onto the previous line if only blank lines intervene
+	newline bool // start a new line even if the source does not
 	comment int  // indentation for comment lines before it (-1: use indent)
 }
 
 // put writes t with the default placement: a continuation of the current
-// statement, separated by a space unless sp is false.
+// statement, separated by a space unless sp is false. Pending settings
+// from next, at, cmtAt and forceNL apply.
 func (p *printer) put(t *syntax.Token, sp bool) {
 	if t == nil {
 		return
 	}
-	ind := p.cont
+	o := tok{indent: p.cont, space: sp, comment: -1}
 	if p.start != nil {
-		ind = *p.start
-		p.start = nil
+		o.indent, p.start = *p.start, nil
 	}
 	if p.space != nil {
-		sp = *p.space
-		p.space = nil
+		o.space, p.space = *p.space, nil
 	}
-	p.emit(t, tok{indent: ind, space: sp, comment: -1})
+	if p.cmt != nil {
+		o.comment, p.cmt = *p.cmt, nil
+	}
+	if p.forceNL && !t.Implicit {
+		o.newline, p.forceNL = true, false
+	}
+	p.emit(t, o)
 }
 
 // next sets the spacing for the next token written (the first token of a
@@ -101,6 +140,20 @@ func (p *printer) next(sp bool) { p.space = &sp }
 // at sets the indentation for the next token, if it starts a line.
 func (p *printer) at(ind int) { p.start = &ind }
 
+// cmtAt sets the indentation of comment lines before the next token.
+func (p *printer) cmtAt(ind int) { p.cmt = &ind }
+
+func (p *printer) write(s string) {
+	p.b.WriteString(s)
+	for i := strings.IndexByte(s, '\n'); i >= 0; i = strings.IndexByte(s, '\n') {
+		p.line++
+		s = s[i+1:]
+		p.lineStart = p.b.Len() - len(s)
+	}
+}
+
+func (p *printer) col() int { return p.b.Len() - p.lineStart }
+
 func (p *printer) emit(t *syntax.Token, o tok) {
 	if t.Implicit {
 		return
@@ -108,35 +161,31 @@ func (p *printer) emit(t *syntax.Token, o tok) {
 	if o.comment < 0 {
 		o.comment = o.indent
 	}
-	nl := 0   // newlines pending
-	gap := "" // horizontal space before a trailing comment
+	nl := 0 // newlines pending
 	commented := false
 	col0 := p.prev == nil // at column 0 of a source line
 	for _, tr := range t.Leading {
 		switch tr.Kind {
 		case lexer.Space:
-			gap = tr.Text
 			col0 = false
 		case lexer.Newline:
 			nl++
-			gap = ""
 			col0 = true
 		case lexer.Comment, lexer.Directive:
 			commented = true
+			text := strings.TrimRight(tr.Text, " \t\r")
 			if nl == 0 && p.prev != nil {
 				// A trailing comment, on the line of the previous token.
-				if gap == "" {
-					gap = " "
-				}
-				p.b.WriteString(gap + strings.TrimRight(tr.Text, " \t\r"))
+				p.mark(p.line).commentAt = p.col()
+				p.write(" " + text)
 			} else {
 				p.newlines(nl)
 				// Comments are re-indented, except those starting in
 				// column 0, which are kept there (directives always are).
 				if tr.Kind == lexer.Comment && !col0 {
-					p.b.WriteString(strings.Repeat(Indent, o.comment))
+					p.write(strings.Repeat(Indent, o.comment))
 				}
-				p.b.WriteString(strings.TrimRight(tr.Text, " \t\r"))
+				p.write(text)
 			}
 			nl = 0
 			col0 = false
@@ -145,22 +194,26 @@ func (p *printer) emit(t *syntax.Token, o tok) {
 	if o.join && !commented {
 		nl = 0
 	}
+	if o.newline {
+		nl = max(nl, 1)
+	}
 	if t.Kind == token.EOF {
 		return
 	}
 	switch {
 	case nl > 0 || (commented && p.prev != nil):
 		p.newlines(max(nl, 1))
-		p.b.WriteString(strings.Repeat(Indent, o.indent))
+		p.write(strings.Repeat(Indent, o.indent))
 		p.lineIndent = o.indent
 		p.lineFirst = t
 	case p.prev == nil:
 		p.lineIndent = 0
 		p.lineFirst = t
 	case o.space || wouldMerge(p.prev, t):
-		p.b.WriteByte(' ')
+		p.write(" ")
 	}
-	p.b.WriteString(t.Text)
+	p.tokLine[t] = p.line
+	p.write(t.Text)
 	p.prev = t
 	if p.setCont {
 		p.cont = p.lineIndent + 1
@@ -174,15 +227,9 @@ func (p *printer) newlines(n int) {
 	if p.b.Len() == 0 {
 		return
 	}
-	// Trim trailing blanks on the line being ended.
-	s := p.b.String()
-	if t := strings.TrimRight(s, " \t"); len(t) != len(s) {
-		p.b.Reset()
-		p.b.WriteString(t)
-	}
-	p.b.WriteByte('\n')
+	p.write("\n")
 	if n > 1 {
-		p.b.WriteByte('\n')
+		p.write("\n")
 	}
 }
 
@@ -191,6 +238,26 @@ func (p *printer) newlines(n int) {
 func wouldMerge(a, b *syntax.Token) bool {
 	toks, _ := lexer.Tokenize(a.Text + b.Text)
 	return len(toks) != 3 || toks[0].Text != a.Text || toks[1].Text != b.Text
+}
+
+// multiLine reports whether the source has a line break anywhere between
+// tokens a and b (exclusive of the trivia before a).
+func (p *printer) multiLine(a, b *syntax.Token) bool {
+	i, j := p.index[a], p.index[b]
+	for k := i; k <= j; k++ {
+		t := &p.toks[k]
+		if k > i {
+			for _, tr := range t.Leading {
+				if tr.Kind == lexer.Newline {
+					return true
+				}
+			}
+		}
+		if k < j && strings.Contains(t.Text, "\n") {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------
@@ -243,6 +310,7 @@ func (p *printer) decl(d syntax.Decl) {
 		p.put(d.Lparen, false)
 		p.next(false)
 		p.tokList(d.Fields)
+		p.at(0)
 		p.put(d.Rparen, false)
 	case *syntax.InvocableDecl:
 		p.at(0)
@@ -280,6 +348,7 @@ func (p *printer) proc(d *syntax.ProcDecl) {
 	p.tokList(d.Params)
 	p.put(d.Lbrack, false)
 	p.put(d.Rbrack, false)
+	p.at(0)
 	p.put(d.Rparen, false)
 	p.put(d.Semi, false)
 	for _, l := range d.Locals {
@@ -315,6 +384,16 @@ func (p *printer) exprs(l syntax.List[syntax.Expr]) {
 	}
 }
 
+// bracketed writes open, the list, and close. If close starts a line it
+// is indented like the line holding open (as in Go).
+func (p *printer) bracketed(open *syntax.Token, l syntax.List[syntax.Expr], close *syntax.Token) {
+	p.put(open, false)
+	outer := p.lineIndent
+	p.exprs(l)
+	p.at(outer)
+	p.put(close, false)
+}
+
 // joinable reports whether an opening brace t may be pulled up onto the
 // previous line: only if it does not begin a statement, i.e. the source
 // token before it is not a (possibly implicit) semicolon. Since an
@@ -325,21 +404,32 @@ func (p *printer) joinable(t *syntax.Token) bool {
 	return i > 0 && p.toks[i-1].Kind != token.SEMICOL
 }
 
-// block writes "{ seq }" with IPL layout: contents and the closing brace
-// one level beyond the line holding the opening brace.
-func (p *printer) block(lb *syntax.Token, l syntax.List[syntax.Expr], rb *syntax.Token) {
+// openBrace writes the "{" of a block or case and returns the indentation
+// of its line. If the braces enclose a line break, the contents are
+// forced onto a new line. (A newline after "{" or before "}" cannot insert
+// a semicolon: "{" is not an Ender and "}" is not a Beginner.)
+func (p *printer) openBrace(lb, rb *syntax.Token, sp bool) (outer int, multi bool) {
 	ind := p.cont
 	if p.start != nil {
-		ind = *p.start
-		p.start = nil
+		ind, p.start = *p.start, nil
 	}
-	sp := p.space != nil && *p.space
-	p.space = nil
+	if p.space != nil {
+		sp, p.space = *p.space, nil
+	}
 	p.emit(lb, tok{indent: ind, space: sp, join: p.joinable(lb), comment: -1})
-	inner := p.lineIndent + 1
-	p.seq(l, inner, true)
-	p.at(inner)
-	p.put(rb, len(l.Elems) > 0)
+	multi = p.multiLine(lb, rb)
+	p.forceNL = multi
+	return p.lineIndent, multi
+}
+
+// closeBrace writes "}" Go style: on a line of its own (if the group spans
+// lines) at the indentation of the line holding "{", with comments before
+// it at the contents' indentation.
+func (p *printer) closeBrace(rb *syntax.Token, outer int, multi, sp bool) {
+	p.forceNL = multi
+	p.at(outer)
+	p.cmtAt(outer + 1)
+	p.put(rb, sp)
 }
 
 func (p *printer) expr(x syntax.Expr) {
@@ -371,37 +461,31 @@ func (p *printer) expr(x syntax.Expr) {
 			p.expr(x.Z)
 		}
 	case *syntax.Paren:
-		p.put(x.Lparen, false)
-		p.exprs(x.List)
-		p.put(x.Rparen, false)
+		p.bracketed(x.Lparen, x.List, x.Rparen)
 	case *syntax.ListLit:
-		p.put(x.Lbrack, false)
-		p.exprs(x.List)
-		p.put(x.Rbrack, false)
+		p.bracketed(x.Lbrack, x.List, x.Rbrack)
 	case *syntax.Block:
-		p.block(x.Lbrace, x.List, x.Rbrace)
+		outer, multi := p.openBrace(x.Lbrace, x.Rbrace, false)
+		p.seq(x.List, outer+1, true)
+		p.closeBrace(x.Rbrace, outer, multi, len(x.List.Elems) > 0)
 	case *syntax.Index:
 		p.expr(x.X)
-		p.put(x.Lbrack, false)
-		p.exprs(x.List)
-		p.put(x.Rbrack, false)
+		p.bracketed(x.Lbrack, x.List, x.Rbrack)
 	case *syntax.Section:
 		p.expr(x.X)
 		p.put(x.Lbrack, false)
+		outer := p.lineIndent
 		p.expr(x.Lo)
 		p.put(x.Op, false)
 		p.expr(x.Hi)
+		p.at(outer)
 		p.put(x.Rbrack, false)
 	case *syntax.Call:
 		p.expr(x.Fun)
-		p.put(x.Lparen, false)
-		p.exprs(x.Args)
-		p.put(x.Rparen, false)
+		p.bracketed(x.Lparen, x.Args, x.Rparen)
 	case *syntax.PDCO:
 		p.expr(x.Fun)
-		p.put(x.Lbrace, false)
-		p.exprs(x.Args)
-		p.put(x.Rbrace, false)
+		p.bracketed(x.Lbrace, x.Args, x.Rbrace)
 	case *syntax.Field:
 		p.expr(x.X)
 		p.put(x.Dot, false)
@@ -415,8 +499,8 @@ func (p *printer) expr(x syntax.Expr) {
 		p.put(x.If, false)
 		l0 := p.lineIndent
 		// "else" aligns with "if" when the if begins its line, or follows
-		// an "else" that does (an else-if chain). Otherwise (x := if ...,
-		// suspend if ...) it is a continuation line.
+		// an "else" that does (an else-if chain). Otherwise
+		// (x := if ..., suspend if ...) it is a continuation line.
 		elseAt := p.cont
 		if p.lineFirst == x.If ||
 			before != nil && before.Kind == token.ELSE && p.lineFirst == before {
@@ -458,32 +542,66 @@ func (p *printer) expr(x syntax.Expr) {
 	case *syntax.Next:
 		p.put(x.Next, false)
 	case *syntax.Case:
-		p.put(x.Case, false)
-		p.next(true)
-		p.expr(x.X)
-		p.put(x.Of, true)
-		p.emit(x.Lbrace, tok{indent: p.cont, space: true, join: p.joinable(x.Lbrace), comment: -1})
-		inner := p.lineIndent + 1
-		for i, c := range x.Clauses.Elems {
-			saveCont, saveSet := p.cont, p.setCont
-			p.at(inner)
-			p.next(true)
-			p.setCont = true
-			if c.Default != nil {
-				p.put(c.Default, false)
-			} else {
-				p.expr(c.Label)
-			}
-			p.put(c.Colon, false)
-			p.stmt(c.Body, inner+1, true)
-			p.cont, p.setCont = saveCont, saveSet
-			if i < len(x.Clauses.Seps) && x.Clauses.Seps[i] != nil {
-				p.put(x.Clauses.Seps[i], false)
-			}
-		}
-		p.at(inner)
-		p.put(x.Rbrace, true)
+		p.caseExpr(x)
 	default:
 		panic(fmt.Sprintf("format: unexpected %T", x))
 	}
+}
+
+func (p *printer) caseExpr(x *syntax.Case) {
+	p.put(x.Case, false)
+	p.next(true)
+	p.expr(x.X)
+	p.put(x.Of, true)
+	outer, multi := p.openBrace(x.Lbrace, x.Rbrace, true)
+	inner := outer + 1
+	p.cases++
+	for i, c := range x.Clauses.Elems {
+		saveCont, saveSet := p.cont, p.setCont
+		p.at(inner)
+		p.next(i > 0 || !multi)
+		p.setCont = true
+		first := c.Default
+		if first != nil {
+			p.put(c.Default, false)
+		} else {
+			first = syntax.Tokens(c.Label)[0]
+			p.expr(c.Label)
+		}
+		p.put(c.Colon, false)
+		line, at := p.line, p.col()
+		p.stmt(c.Body, inner+1, true)
+		p.cont, p.setCont = saveCont, saveSet
+		// Record an alignment point for the body of a clause that is on a
+		// line of its own.
+		if c.Body != nil && p.tokLine[first] == line && p.startsLine(first) &&
+			p.line == line && p.tokLine[syntax.Tokens(c.Body)[0]] == line {
+			m := p.mark(line)
+			m.caseAt, m.caseGroup = at, p.cases
+		}
+		if i < len(x.Clauses.Seps) && x.Clauses.Seps[i] != nil {
+			p.put(x.Clauses.Seps[i], false)
+		}
+	}
+	p.closeBrace(x.Rbrace, outer, multi, true)
+}
+
+// startsLine reports whether t was written as the first token of a line.
+func (p *printer) startsLine(t *syntax.Token) bool {
+	l, ok := p.tokLine[t]
+	if !ok {
+		return false
+	}
+	i := p.index[t]
+	return i == 0 || p.tokLine[p.prevWritten(i)] != l
+}
+
+// prevWritten returns the last non-implicit token before index i.
+func (p *printer) prevWritten(i int) *syntax.Token {
+	for i--; i >= 0; i-- {
+		if !p.toks[i].Implicit {
+			return &p.toks[i]
+		}
+	}
+	return nil
 }

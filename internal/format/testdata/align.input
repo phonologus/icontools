@@ -1,0 +1,23 @@
+procedure main()
+x := 1      # one
+longer_name := 2  # two
+y := 3 # three
+
+z := 4  # alone
+case x of {
+1: write("one")   # c1
+22: write("two")
+default: write("other")
+"long label": {
+f()
+g() }
+3: h()
+}
+s ? { while tab(upto(c)) do
+count +:= 1 }
+if a then { b
+} else { c }
+L := [1, 2,
+3
+]
+end
