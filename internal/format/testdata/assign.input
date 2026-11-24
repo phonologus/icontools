@@ -1,0 +1,20 @@
+procedure main()
+   llabels := "ab"
+   rlabels:= "cd"
+   x := 1   # not aligned by the author: left alone
+
+   files   := before(files, param[i+1])
+   i   +:= 1
+   n := 0             # aligned run, with comments
+   longer_name := f(x)
+
+   fmt_TAG     := "fmt "
+   s := "a long \
+string"
+   result <- 3
+   y  := 1
+   if z then
+      w := 2
+   total   +:= y
+   count   := 0
+end

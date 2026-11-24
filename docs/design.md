@@ -188,7 +188,20 @@ apart rather than becoming `--x`). Trailing whitespace is removed.
 1. In a run of consecutive single-line clauses of the same `case`, the
    bodies start in a common column (as gofmt aligns key–value pairs). A
    clause spanning several lines ends the run.
-2. In a run of consecutive lines at the same indentation that end with the
+2. In a run of consecutive lines at the same indentation, each holding a
+   complete single-line assignment statement (`:=`, `:=:`, `<-`, `<->`, or
+   an augmented `op:=`), the operators start in a common column:
+   ```
+   files       := before(files, param[i + 1])
+   i           +:= 1
+   longer_name := f(x)
+   ```
+   This is Icon's nearest equivalent to the tables gofmt aligns in Go
+   `var`/`const` blocks and struct declarations. But Icon has no block
+   marking a group as a table, and runs of assignments are everywhere in
+   ordinary code, so (as for rule 3) the run is aligned only if the author
+   aligned it: at least one of its operators was padded in the source.
+3. In a run of consecutive lines at the same indentation that end with the
    same binary operator, the operators start in a common column, as in
    ```
    b ||:=
@@ -200,7 +213,7 @@ apart rather than becoming `--x`). Trailing whitespace is removed.
    a whole run far right. So it applies only when the author aligned the
    run: at least one of its operators was preceded by padding (two or more
    blanks, or a tab) in the source. Otherwise operators get single spaces.
-3. In a run of consecutive lines with trailing comments, the comments
+4. In a run of consecutive lines with trailing comments, the comments
    start in a common column one space beyond the longest code (as gofmt). (Like gofmt, this can make one long line push a whole
 run of comments to the right; gofmt's heuristics for breaking such runs
 are a possible refinement.)

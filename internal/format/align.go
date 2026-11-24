@@ -12,6 +12,9 @@ import (
 //
 //   - In a run of consecutive lines holding single-line case clauses of the
 //     same case expression, the clause bodies start in a common column.
+//   - In a run of consecutive lines at the same indentation, each holding
+//     a single-line assignment statement, the assignment operators start in
+//     a common column, if the author aligned them.
 //   - In a run of consecutive lines at the same indentation that end with
 //     the same binary operator (as in a chain "a ||" / "b ||" / ...), the
 //     operators start in a common column, if the author aligned them (any
@@ -46,6 +49,37 @@ func (p *printer) align(out string) string {
 			lines[l] = pad(old, m.caseAt, w)
 			if m.commentAt > m.caseAt {
 				m.commentAt += len(lines[l]) - len(old)
+			}
+		}
+	})
+
+	// Assignment statements.
+	runs(ls, func(l int) (int, bool) {
+		m := p.marks[l]
+		return m.assignIndent, m.assignAt >= 0
+	}, func(run []int) {
+		// As for line-final operators, align only runs the author aligned.
+		deliberate := false
+		for _, l := range run {
+			deliberate = deliberate || p.marks[l].assignPadded
+		}
+		if len(run) < 2 || !deliberate {
+			return
+		}
+		w := 0
+		for _, l := range run {
+			w = max(w, width(lines[l][:p.marks[l].assignAt]))
+		}
+		for _, l := range run {
+			m := p.marks[l]
+			old := lines[l]
+			lines[l] = pad(old, m.assignAt, w)
+			d := len(lines[l]) - len(old)
+			if m.opAt > m.assignAt {
+				m.opAt += d
+			}
+			if m.commentAt > m.assignAt {
+				m.commentAt += d
 			}
 		}
 	})

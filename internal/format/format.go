@@ -81,6 +81,11 @@ type printer struct {
 	forceNL bool  // the next token starts a new line
 	markOp  bool  // record the next token as a line-final operator
 
+	// assign is the assignment statement being printed, if any; its
+	// operator position is recorded for alignment.
+	assign     *syntax.Binary
+	markAssign bool
+
 	marks map[int]*marks // alignment points, by output line
 	cases int            // counter identifying case expressions
 }
@@ -95,13 +100,16 @@ type marks struct {
 	opText            string
 	opIndent          int
 	opPadded          bool // the source had padding before the operator
+	assignAt          int  // before the operator of an assignment statement
+	assignIndent      int
+	assignPadded      bool
 	commentAt         int
 }
 
 func (p *printer) mark(line int) *marks {
 	m := p.marks[line]
 	if m == nil {
-		m = &marks{caseAt: -1, opAt: -1, commentAt: -1}
+		m = &marks{caseAt: -1, opAt: -1, assignAt: -1, commentAt: -1}
 		p.marks[line] = m
 	}
 	return m
@@ -109,12 +117,13 @@ func (p *printer) mark(line int) *marks {
 
 // tok describes how to place one token.
 type tok struct {
-	indent  int  // indentation if the token starts a line
-	space   bool // separated from the previous token on the same line
-	join    bool // pull onto the previous line if only blank lines intervene
-	newline bool // start a new line even if the source does not
-	markOp  bool // record an operator alignment point before the token
-	comment int  // indentation for comment lines before it (-1: use indent)
+	indent     int  // indentation if the token starts a line
+	space      bool // separated from the previous token on the same line
+	join       bool // pull onto the previous line if only blank lines intervene
+	newline    bool // start a new line even if the source does not
+	markOp     bool // record an operator alignment point before the token
+	markAssign bool // record an assignment alignment point before the token
+	comment    int  // indentation for comment lines before it (-1: use indent)
 }
 
 // put writes t with the default placement: a continuation of the current
@@ -138,6 +147,7 @@ func (p *printer) put(t *syntax.Token, sp bool) {
 		o.newline, p.forceNL = true, false
 	}
 	o.markOp, p.markOp = p.markOp, false
+	o.markAssign, p.markAssign = p.markAssign, false
 	p.emit(t, o)
 }
 
@@ -223,6 +233,11 @@ func (p *printer) emit(t *syntax.Token, o tok) {
 			m.opAt, m.opText, m.opIndent = p.col(), t.Text, p.lineIndent
 			m.opPadded = padded(t)
 		}
+		if o.markAssign {
+			m := p.mark(p.line)
+			m.assignAt, m.assignIndent = p.col(), p.lineIndent
+			m.assignPadded = padded(t)
+		}
 		if o.space || wouldMerge(p.prev, t) {
 			p.write(" ")
 		}
@@ -296,12 +311,40 @@ func (p *printer) stmt(x syntax.Expr, ind int, sp bool) {
 // seq formats a semicolon-separated sequence of statements at ind.
 func (p *printer) seq(l syntax.List[syntax.Expr], ind int, sp bool) {
 	for i, x := range l.Elems {
-		p.stmt(x, ind, sp || i > 0)
+		p.assignStmt(x, ind, sp || i > 0)
 		if i < len(l.Seps) && l.Seps[i] != nil {
 			p.at(ind)
 			p.put(l.Seps[i], false)
 		}
 	}
+}
+
+// assignStmt is stmt, but if x is an assignment written on a line of its
+// own, it records the position of the assignment operator for alignment.
+func (p *printer) assignStmt(x syntax.Expr, ind int, sp bool) {
+	b, ok := x.(*syntax.Binary)
+	if !ok || !isAssign(b.Op.Kind) {
+		p.stmt(x, ind, sp)
+		return
+	}
+	saveAssign := p.assign
+	p.assign = b
+	p.stmt(x, ind, sp)
+	p.assign = saveAssign
+	toks := syntax.Tokens(b)
+	first, line := toks[0], p.tokLine[b.Op]
+	if m := p.marks[line]; m != nil && m.assignAt >= 0 &&
+		!(p.startsLine(first) && p.tokLine[first] == line && p.tokLine[toks[len(toks)-1]] == line &&
+			!strings.Contains(toks[len(toks)-1].Text, "\n")) {
+		m.assignAt = -1 // not a single-line statement on a line of its own
+	}
+}
+
+// isAssign reports whether k is an assignment operator: :=, :=:, <-, <->
+// or an augmented assignment such as +:=.
+func isAssign(k token.Kind) bool {
+	s := k.String()
+	return s == ":=:" || s == "<-" || s == "<->" || strings.HasSuffix(s, ":=")
 }
 
 // ---------------------------------------------------------------------
@@ -463,6 +506,7 @@ func (p *printer) expr(x syntax.Expr) {
 	case *syntax.Binary:
 		p.expr(x.X)
 		p.markOp = p.endsLine(x.Op)
+		p.markAssign = x == p.assign
 		p.put(x.Op, true)
 		p.next(true)
 		p.expr(x.Y)
