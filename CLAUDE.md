@@ -13,3 +13,6 @@ Aim for small, working increments.
   only on hand-written snippets.
 - Standard library only unless there is a strong reason; discuss new
   dependencies first.
+- Git: commit locally; push to origin only when the owner asks. The push
+  token is in `../git/pat` — pass it per command via an inline credential
+  helper; never print it or store it in config or URLs.

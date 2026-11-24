@@ -92,3 +92,46 @@ byte for byte. Offsets are bytes; `lexer.Lines` maps them to lines.
 Not yet handled: code inside inactive `$ifdef` branches is lexed like any
 other code, which can produce spurious errors. The formatter will need to
 treat such regions verbatim.
+
+## Parser
+
+`syntax.Parse` is a hand-written recursive-descent parser over the token
+stream, following `grammar.h`.
+
+- **Precedence**: one function level per grammar level, loosest first:
+  `&`; `?`; assignments and augmented assignments (right-assoc); `to ...
+  by` (left); `|` (right); comparisons; `|| |||`; `+ - ++ --`;
+  `* / % **`; `^` (right); `\ @ !` (binary); then prefix operators
+  (including `not`), then postfix forms (`x[...]`, `x(...)`, `x{...}`,
+  `x.f`).
+- **Control structures** (`if`, `while`, `every`, `return`, `suspend`,
+  `create`, `break`, ...) are at the tightest level but end in a full
+  expression, and yacc's shift preference makes them extend as far right
+  as possible: `x := if a then b else c + 1` puts `c + 1` in the else
+  branch.
+- **Unary forms of binary-only tokens** (`||x`, `--x`, `==x`, ...) parse as
+  unary operators. icont treats `|`, `||` and `|||` prefixes all as
+  repeated alternation.
+- **Statement separators**: a procedure body is `{ nexpr ; }`, so the last
+  expression before `end` needs `;` or a newline: `return 1 end` on one
+  line is an error. Case clauses are separated (not terminated) by `;`, so
+  `{ 1: a; }` is an error too.
+- **Empty lists**: `f()`, `f{}`, `[]`, `{}` have no elements in the tree;
+  `f(a,,b)` has a nil middle element.
+- **Not checked by the parser** (icont reports these from its symbol
+  table): redeclared identifiers, inconsistent redeclaration of globals,
+  unknown `&keywords`. These belong in a later semantic pass.
+
+### Verification
+
+`tools/icontok -t` replaces icont's code generator with a printer of the
+parse tree it builds for each procedure. The tests map our tree to the
+same form (`icontree_test.go`, mirroring the action macros in
+`icont/tgrammar.c`) and compare:
+
+- `TestOracle`: every corpus file. Both parsers accept or reject the same
+  files, and all 7750 procedures produce identical trees, including leaf
+  positions.
+- `TestMutations`: random token deletions, duplications and swaps applied
+  to corpus files (`MUTATIONS=n`, default 300). In a 30,000-mutant run,
+  icont and we agreed on validity and trees in every case.

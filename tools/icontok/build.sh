@@ -21,7 +21,7 @@ if [ ! -f "$work/src/icont/tparse.o" ]; then
   (cd "$work/src/icont" && make >/dev/null 2>&1)
 fi
 cd "$work/src/icont"
-objs=$(ls *.o | grep -v '^tunix\.o$')
+objs=$(ls *.o | grep -v -e '^tunix\.o$' -e '^tcode\.o$')
 common=$(ls ../common/*.o | grep -v rswitch)
 cc -w -I. -o icontok "$here/icontok.c" $objs $common -lm 2>&1
 echo "$work/src/icont/icontok"
