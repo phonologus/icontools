@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"icontools/internal/corpus"
+	"github.com/phonologus/icontools/internal/corpus"
 )
 
 // entry matches lines of both toktab[] and optab[] in lextab.h, e.g.

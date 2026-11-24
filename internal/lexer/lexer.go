@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"icontools/internal/token"
+	"github.com/phonologus/icontools/internal/token"
 )
 
 // TriviaKind classifies text that carries no tokens.

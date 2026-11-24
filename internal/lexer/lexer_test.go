@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"icontools/internal/corpus"
-	"icontools/internal/token"
+	"github.com/phonologus/icontools/internal/corpus"
+	"github.com/phonologus/icontools/internal/token"
 )
 
 // render shows significant tokens compactly; implicit semicolons are "⁏".
