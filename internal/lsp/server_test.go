@@ -31,7 +31,7 @@ func newClient(t *testing.T) *client {
 		done: make(chan error, 1),
 	}
 	go func() {
-		cl.done <- Run(sr, sw, io.Discard)
+		cl.done <- Run(sr, sw, io.Discard, Options{})
 		sw.Close()
 	}()
 	go func() {

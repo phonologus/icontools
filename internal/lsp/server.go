@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/phonologus/icontools/internal/builtin"
 	"github.com/phonologus/icontools/internal/format"
 	"github.com/phonologus/icontools/internal/syntax"
 	"github.com/phonologus/icontools/internal/token"
@@ -20,6 +21,7 @@ const Version = "0.1.0"
 // Server is an Icon language server. It handles one client over one
 // connection, processing messages in order.
 type Server struct {
+	opts         Options
 	conn         *conn
 	log          *log.Logger
 	docs         map[string]*document
@@ -38,14 +40,20 @@ type document struct {
 	m       *mapper
 }
 
+// Options configures a Server.
+type Options struct {
+	Docs *builtin.Docs // reference documentation, or nil
+}
+
 // ErrExitWithoutShutdown is returned by Run if the client sent "exit"
 // without first sending "shutdown"; the process should exit with status 1.
 var ErrExitWithoutShutdown = errors.New("exit without shutdown")
 
 // Run serves the client on r and w until it sends "exit" or r is closed.
 // Diagnostic logging goes to logw (which may be io.Discard).
-func Run(r io.Reader, w io.Writer, logw io.Writer) error {
+func Run(r io.Reader, w io.Writer, logw io.Writer, opts Options) error {
 	s := &Server{
+		opts: opts,
 		conn: newConn(r, w),
 		log:  log.New(logw, "iconls: ", log.LstdFlags),
 		docs: map[string]*document{},
