@@ -229,5 +229,13 @@ output has the same significant token stream as the input, including
 implicit semicolons; every comment and directive is preserved; and
 formatting is idempotent.
 
+**VIB sections** are left exactly as they are: everything from a
+`#===<<vib:begin>>===` marker line through the matching
+`#===<<vib:end>>===` line (and the older `xie` markers). VIB, the IPL's
+interface builder, generates that code and rewrites it on every save, so
+formatting it would only cause churn. The file is formatted as usual and
+the original lines are then put back between the markers; since the
+markers are full-line comments, this cannot split a token or a line.
+
 Not handled: inactive `$ifdef` regions (files whose preprocessor branches
 do not parse as a whole are refused).

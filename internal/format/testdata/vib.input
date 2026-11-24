@@ -1,0 +1,16 @@
+procedure main()
+  x:=1
+end
+
+#===<<vib:begin>>===	modify using vib; do not remove this marker line
+procedure ui_atts()
+   return ["size=1354,759", "bg=pale gray"]
+end
+
+procedure ui(win, cbk)
+return vsetup(win, cbk,
+   [":Sizer:::0,0,1354,759:",],
+   [".waveform:Rect:grooved::6,584,999,147:",waveform_cb],
+   )
+end
+#===<<vib:end>>===	end of section maintained by vib

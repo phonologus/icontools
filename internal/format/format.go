@@ -45,6 +45,7 @@ func File(f *syntax.File) string {
 	}
 	p.emit(f.EOF, tok{indent: 0})
 	out := p.align(p.b.String())
+	out = preserveVIB(f.Src, out)
 	out = strings.TrimRight(out, " \t\n")
 	if out == "" {
 		return ""

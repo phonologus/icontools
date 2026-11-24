@@ -92,6 +92,10 @@ func checkSafe(t *testing.T, name string, src, out []byte) bool {
 		t.Errorf("%s: token stream changed at token %d: %s -> %s", name, d, at(a, d), at(b, d))
 		return false
 	}
+	if a, b := vibSection(string(src)), vibSection(string(out)); a != b {
+		t.Errorf("%s: VIB section changed", name)
+		return false
+	}
 	ca, cb := comments(string(src)), comments(string(out))
 	if d := firstDiff(ca, cb); d >= 0 {
 		t.Errorf("%s: comment %d changed: %s -> %s", name, d, at(ca, d), at(cb, d))
@@ -172,4 +176,22 @@ func countChanged(a, b string) (total, changed int) {
 		}
 	}
 	return total, changed
+}
+
+// vibSection returns the text from the first VIB begin marker through the
+// end of the following end-marker line, or "".
+func vibSection(s string) string {
+	i := strings.Index(s, "\n#===<<vib:begin>>===")
+	if i < 0 {
+		return ""
+	}
+	j := strings.Index(s[i:], "\n#===<<vib:end>>===")
+	if j < 0 {
+		return ""
+	}
+	k := strings.IndexByte(s[i+j+1:], '\n')
+	if k < 0 {
+		return s[i:]
+	}
+	return s[i : i+j+1+k]
 }
