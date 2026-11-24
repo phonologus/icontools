@@ -1,0 +1,6 @@
+/icfmt
+/iconls
+/bin/
+*.test
+*.out
+.DS_Store
