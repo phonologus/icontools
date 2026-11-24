@@ -1,0 +1,58 @@
+# Continuous integration: runs on every push to main and every pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go tests (with the icont oracle)
+    runs-on: ubuntu-latest
+    env:
+      ICON_SRC: ${{ github.workspace }}/icon
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: icontools
+      # The Icon sources: ground truth and test corpus.
+      - uses: actions/checkout@v7
+        with:
+          repository: gtownsend/icon
+          path: icon
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: icontools/go.mod
+          cache-dependency-path: icontools/go.mod
+      - name: gofmt
+        working-directory: icontools
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: go vet
+        working-directory: icontools
+        run: go vet ./...
+      - name: Build icont and the icontok oracle
+        working-directory: icontools
+        run: echo "ICONTOK=$(tools/icontok/build.sh "$ICON_SRC" "$RUNNER_TEMP/icontok-build")" >> "$GITHUB_ENV"
+      - name: go test
+        working-directory: icontools
+        run: go test ./...
+
+  vscode:
+    name: VS Code extension (grammar tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - run: npm ci
+      - run: npm run test:unit
