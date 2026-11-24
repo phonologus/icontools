@@ -195,6 +195,12 @@ func TestOracle(t *testing.T) {
 				if f, ok := builtin.LookupFunction(m[1]); ok && f.Graphics {
 					continue
 				}
+				// Which feature symbols (_GRAPHICS, _MS_WINDOWS, ...) icont
+				// predefines depends on how it was built; we treat them
+				// all as possibly defined.
+				if _, ok := builtin.LookupPredefined(m[1]); ok {
+					continue
+				}
 				want = append(want, fmt.Sprintf("%s: %s %s", m[1], m[2], m[3]))
 			}
 		}
