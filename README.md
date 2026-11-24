@@ -35,3 +35,16 @@ go test ./...
 go vet ./...
 go build ./cmd/...
 ```
+
+### The icont oracle
+
+`tools/icontok` is a tiny C driver that links icont's own lexer and prints
+its token stream. With it, `TestOracle` checks our lexer against icont on
+the whole corpus (preprocessing files with `icont -E` where needed).
+
+```sh
+ICONTOK=$(tools/icontok/build.sh) go test ./internal/lexer
+```
+
+`build.sh` copies the reference tree to a scratch directory (default
+`$TMPDIR/icontok-build`) and builds there, so `../icon` is never modified.

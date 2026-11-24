@@ -46,3 +46,49 @@ them as trivia.
 ## Grammar
 
 `icon/src/h/grammar.h` (yacc). Error messages: `icon/src/h/parserr.h`.
+
+## Lexical details (from `yylex.h`, `getopr` in `lextab.h`, `ipp.c`)
+
+Confirmed against icont's own lexer on the whole corpus (see
+`TestOracle`).
+
+- **Operators** are matched greedily with no backtracking: `%:x` is an
+  error, not `%` `:` `x`.
+- **`.`** followed by a digit begins a real literal (`.5`); otherwise it is
+  the DOT operator. `3.foo` is `3.` then `foo`.
+- **Numbers**: `16rFF`, `2r101` (radix 2–36, digits case-insensitive);
+  `1e10`, `1.5E-3`. `10x` is `10` then `x`.
+- **Keywords** (`&subject`) are `&` followed by an identifier.
+- **String/cset literals**:
+  - A backslash takes the next character literally, *including a newline*,
+    which continues the literal onto the next line.
+  - `\^c` takes one more character, so `"\^""` is a complete literal.
+  - `_` as the last non-blank on a line continues the literal at the first
+    non-blank of the next line (blank lines are skipped too).
+  - Otherwise an unescaped newline ends the literal with "unclosed quote".
+  - A newline inside a continued literal does not count for semicolon
+    insertion.
+- **Invalid characters** are skipped by icont without resetting the
+  semicolon-insertion state; we emit ILLEGAL tokens with the same
+  behaviour. An implicit semicolon is placed immediately before the
+  Beginner that triggers it.
+- **Directives**: a line whose first non-blank is `$`, followed by a blank
+  or a non-punctuation character. So `$define` and `$ include` are
+  directives, but `$(` at the start of a line is a digraph.
+- **`#line n "file"`** comments make icont renumber lines. We always report
+  physical positions, which is what editors need.
+- **ipp predefines** the symbols in `src/h/features.h` (`_UNIX`, `_PIPES`,
+  `_V9`, ...) as `1`, so code using them is expanded even with no
+  `$define` in the file.
+
+## Lexer output model
+
+`lexer.Tokenize` returns every token with its *leading* trivia (Space,
+Newline, Comment, Directive); trailing trivia at end of file hangs on the
+EOF token. Implicit semicolons are zero-width SEMICOL tokens with
+`Implicit` set. Concatenating trivia and token text reproduces the input
+byte for byte. Offsets are bytes; `lexer.Lines` maps them to lines.
+
+Not yet handled: code inside inactive `$ifdef` branches is lexed like any
+other code, which can produce spurious errors. The formatter will need to
+treat such regions verbatim.
