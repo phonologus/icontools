@@ -49,12 +49,19 @@ icont sees, and refuses files with syntax errors. See `docs/design.md`.
 
 ```sh
 go install ./cmd/iconls
+iconls fetch-docs      # optional: cache the Icon reference for hover docs
 ```
 
 `iconls` is a language server: editors start it and talk to it over
-standard input and output. So far it provides syntax-error diagnostics as
-you type, an outline (document symbols), and formatting with icfmt.
-`iconls -log file` writes a server log for debugging.
+standard input and output. It provides diagnostics (syntax errors, and
+icont's semantic checks such as undeclared identifiers), hover with
+documentation, go to definition, find references, highlights,
+completion, signature help, rename, document and workspace symbols, and
+formatting with icfmt.
+
+Linked library sources are found via the `ipath` initialization option
+(a list of directories, e.g. the IPL's `procs` and `gprocs`), `$IPATH`
+and `$LPATH`. `iconls -log file` writes a server log for debugging.
 
 ## Development
 

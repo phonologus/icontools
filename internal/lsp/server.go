@@ -11,6 +11,7 @@ import (
 
 	"github.com/phonologus/icontools/internal/builtin"
 	"github.com/phonologus/icontools/internal/format"
+	"github.com/phonologus/icontools/internal/sema"
 	"github.com/phonologus/icontools/internal/syntax"
 	"github.com/phonologus/icontools/internal/token"
 )
@@ -24,20 +25,24 @@ type Server struct {
 	opts         Options
 	conn         *conn
 	log          *log.Logger
-	docs         map[string]*document
+	docs         map[string]*document // open documents, by URI
+	ws           *workspace
 	initialized  bool
 	shutdown     bool
 	utf8         bool // positions are UTF-8 byte offsets (else UTF-16)
 	hierarchical bool // client supports hierarchical document symbols
 }
 
-// document is an open text document and its parse.
+// document is a source file (open in the editor, or read from disk) and
+// its parse.
 type document struct {
 	uri     string
+	path    string // "" if the URI is not a file: URI
 	version int
 	text    string
 	file    *syntax.File
 	m       *mapper
+	sema    *sema.File
 }
 
 // Options configures a Server.
@@ -57,6 +62,7 @@ func Run(r io.Reader, w io.Writer, logw io.Writer, opts Options) error {
 		conn: newConn(r, w),
 		log:  log.New(logw, "iconls: ", log.LstdFlags),
 		docs: map[string]*document{},
+		ws:   newWorkspace(),
 	}
 	for {
 		m, err := s.conn.read()
@@ -141,10 +147,16 @@ func (s *Server) dispatch(m *message) (any, error) {
 		if err := unmarshal(m.Params, &p); err != nil {
 			return nil, err
 		}
+		if d := s.docs[p.TextDocument.URI]; d != nil {
+			delete(s.ws.open, d.path)
+		}
 		delete(s.docs, p.TextDocument.URI)
-		// Clear the diagnostics of the closed document.
-		return nil, s.conn.notify("textDocument/publishDiagnostics",
+		// Clear the diagnostics of the closed document, and refresh the
+		// others (the file on disk may differ from the closed buffer).
+		err := s.conn.notify("textDocument/publishDiagnostics",
 			PublishDiagnosticsParams{URI: p.TextDocument.URI, Diagnostics: []Diagnostic{}})
+		s.publishAll()
+		return nil, err
 	case "textDocument/documentSymbol":
 		var p DocumentSymbolParams
 		if err := unmarshal(m.Params, &p); err != nil {
@@ -169,6 +181,44 @@ func (s *Server) dispatch(m *message) (any, error) {
 			return nil, err
 		}
 		return formatting(d), nil
+	case "textDocument/hover":
+		return withPosition(s, m, s.hover)
+	case "textDocument/definition":
+		return withPosition(s, m, s.definition)
+	case "textDocument/references":
+		var p ReferenceParams
+		if err := unmarshal(m.Params, &p); err != nil {
+			return nil, err
+		}
+		c, err := s.at(p.TextDocumentPositionParams)
+		if err != nil {
+			return nil, err
+		}
+		return s.references(c, p.Context.IncludeDeclaration), nil
+	case "textDocument/documentHighlight":
+		return withPosition(s, m, s.highlight)
+	case "textDocument/completion":
+		return withPosition(s, m, s.completion)
+	case "textDocument/signatureHelp":
+		return withPosition(s, m, s.signatureHelp)
+	case "textDocument/prepareRename":
+		return withPosition(s, m, s.prepareRename)
+	case "textDocument/rename":
+		var p RenameParams
+		if err := unmarshal(m.Params, &p); err != nil {
+			return nil, err
+		}
+		c, err := s.at(p.TextDocumentPositionParams)
+		if err != nil {
+			return nil, err
+		}
+		return s.rename(c, p.NewName)
+	case "workspace/symbol":
+		var p WorkspaceSymbolParams
+		if err := unmarshal(m.Params, &p); err != nil {
+			return nil, err
+		}
+		return s.workspaceSymbols(p.Query), nil
 	}
 	if m.ID != nil && !strings.HasPrefix(m.Method, "$/") {
 		return nil, &rpcError{codeMethodNotFound, "method not supported: " + m.Method}
@@ -193,6 +243,16 @@ func (s *Server) initialize(p *InitializeParams) *InitializeResult {
 			TextDocumentSync:           TextDocumentSyncOptions{OpenClose: true, Change: 1},
 			DocumentSymbolProvider:     true,
 			DocumentFormattingProvider: true,
+			HoverProvider:              true,
+			DefinitionProvider:         true,
+			ReferencesProvider:         true,
+			DocumentHighlightProvider:  true,
+			WorkspaceSymbolProvider:    true,
+			CompletionProvider:         &CompletionOptions{TriggerCharacters: []string{".", "&"}},
+			SignatureHelpProvider: &SignatureHelpOptions{
+				TriggerCharacters: []string{"(", ","}, RetriggerCharacters: []string{","},
+			},
+			RenameProvider: &RenameOptions{PrepareProvider: true},
 		},
 	}
 	for _, e := range p.Capabilities.General.PositionEncodings {
@@ -201,6 +261,8 @@ func (s *Server) initialize(p *InitializeParams) *InitializeResult {
 			res.Capabilities.PositionEncoding = "utf-8"
 		}
 	}
+	s.ws.utf8 = s.utf8
+	s.ws.ipath = p.InitializationOptions.IPath
 	return res
 }
 
@@ -212,26 +274,55 @@ func (s *Server) doc(uri string) (*document, error) {
 	return d, nil
 }
 
-// update records new text for a document, reparses it and publishes its
-// diagnostics.
+// update records new text for a document, reparses it and publishes
+// diagnostics for all open documents (a change to one file can affect the
+// names declared in others).
 func (s *Server) update(uri string, version int, text string) {
-	d := &document{uri: uri, version: version, text: text}
-	d.file = syntax.Parse(text)
-	d.m = newMapper(text, s.utf8)
+	d := newDocument(uri, version, text, s.utf8)
 	s.docs[uri] = d
-	v := version
-	if err := s.conn.notify("textDocument/publishDiagnostics", PublishDiagnosticsParams{
-		URI: uri, Version: &v, Diagnostics: diagnostics(d),
-	}); err != nil {
-		s.log.Printf("publishDiagnostics: %v", err)
+	if d.path != "" {
+		s.ws.open[d.path] = d
+	}
+	s.publishAll()
+}
+
+func (s *Server) publishAll() {
+	uris := make([]string, 0, len(s.docs))
+	for uri := range s.docs {
+		uris = append(uris, uri)
+	}
+	sort.Strings(uris)
+	for _, uri := range uris {
+		d := s.docs[uri]
+		v := d.version
+		if err := s.conn.notify("textDocument/publishDiagnostics", PublishDiagnosticsParams{
+			URI: uri, Version: &v, Diagnostics: s.diagnostics(d),
+		}); err != nil {
+			s.log.Printf("publishDiagnostics: %v", err)
+		}
 	}
 }
 
 // ---------------------------------------------------------------------
 // Diagnostics
 
-func diagnostics(d *document) []Diagnostic {
+// diagnostics returns d's syntax errors or, if it has none, the semantic
+// problems found by resolving its names in its program.
+func (s *Server) diagnostics(d *document) []Diagnostic {
 	ds := []Diagnostic{}
+	if len(d.file.Errors) == 0 {
+		prog, _ := s.ws.program(d)
+		for _, e := range prog.Resolve(d.sema).Diagnostics {
+			sev := SeverityError
+			if e.Severity == sema.Warning {
+				sev = SeverityWarning
+			}
+			ds = append(ds, Diagnostic{
+				Range: d.m.rangeOf(e.Offset, e.End), Severity: sev, Source: "iconls", Message: e.Msg,
+			})
+		}
+		return ds
+	}
 	for _, e := range d.file.Errors {
 		start, end := e.Offset, e.Offset
 		if t := tokenAt(d.file, e.Offset); t != nil {

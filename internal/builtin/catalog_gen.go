@@ -221,3 +221,22 @@ var keywords = []Keyword{
 	{Name: "x", Summary: "mouse horizontal position."},
 	{Name: "y", Summary: "mouse vertical position."},
 }
+
+var predefined = []Predefined{
+	{Name: "_V9", Feature: ""},
+	{Name: "_UNIX", Feature: "UNIX"},
+	{Name: "_MACINTOSH", Feature: "Macintosh"},
+	{Name: "_HAIKU", Feature: "Haiku"},
+	{Name: "_MS_WINDOWS", Feature: "MS Windows"},
+	{Name: "_CYGWIN", Feature: "Cygwin"},
+	{Name: "_ASCII", Feature: "ASCII"},
+	{Name: "_CO_EXPRESSIONS", Feature: "co-expressions"},
+	{Name: "_DYNAMIC_LOADING", Feature: "dynamic loading"},
+	{Name: "_EXTERNAL_VALUES", Feature: "external values"},
+	{Name: "_KEYBOARD_FUNCTIONS", Feature: "keyboard functions"},
+	{Name: "_LARGE_INTEGERS", Feature: "large integers"},
+	{Name: "_PIPES", Feature: "pipes"},
+	{Name: "_SYSTEM_FUNCTION", Feature: "system function"},
+	{Name: "_GRAPHICS", Feature: "graphics"},
+	{Name: "_X_WINDOW_SYSTEM", Feature: "X Windows"},
+}

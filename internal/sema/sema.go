@@ -31,10 +31,12 @@ const (
 	Record                // record declaration
 	Field                 // field of a record declaration
 	Builtin               // built-in function
+	Macro                 // preprocessor symbol ($define, or predefined)
 )
 
 var kindNames = [...]string{"parameter", "local", "static", "undeclared local",
-	"global", "procedure", "record", "field", "built-in function"}
+	"global", "procedure", "record", "field", "built-in function",
+	"preprocessor symbol"}
 
 func (k Kind) String() string { return kindNames[k] }
 
@@ -54,6 +56,23 @@ type Symbol struct {
 	Node syntax.Node
 
 	Builtin *builtin.Function // for Builtin
+	Macro   *MacroDef         // for Macro
+}
+
+// MacroDef is a preprocessor symbol definition.
+type MacroDef struct {
+	Name, Value string
+	Path        string // file holding the $define ("" if predefined)
+	Offset, End int    // byte span of the name in that file
+	Predefined  *builtin.Predefined
+}
+
+// MacroScope is a macro definition in force in part of a file: from byte
+// offset From (the $define, or the $include that brought it in) to Until
+// (a $undef or redefinition, or the end of the file).
+type MacroScope struct {
+	Def         *MacroDef
+	From, Until int
 }
 
 // Proc returns the procedure a local symbol belongs to.
@@ -66,6 +85,7 @@ func (s *Symbol) Proc() *syntax.ProcDecl {
 type File struct {
 	Path   string
 	Syntax *syntax.File
+	Macros []MacroScope // preprocessor symbols defined in or included by the file
 }
 
 // Program is a set of files linked together.
@@ -208,6 +228,46 @@ type resolver struct {
 	info   *Info
 	proc   *syntax.ProcDecl
 	locals map[string]*Symbol
+	macros map[*MacroDef]*Symbol
+}
+
+// macro returns the symbol for a preprocessor symbol in force at t, if
+// any: one defined in (or included into) the file, or predefined.
+func (r *resolver) macro(t *syntax.Token) *Symbol {
+	var def *MacroDef
+	for i := range r.info.File.Macros {
+		m := &r.info.File.Macros[i]
+		if m.Def.Name == t.Text && m.From <= t.Offset && t.Offset < m.Until {
+			def = m.Def
+		}
+	}
+	if def == nil {
+		p, ok := builtin.LookupPredefined(t.Text)
+		if !ok {
+			return nil
+		}
+		def = predefinedDef(p)
+	}
+	if r.macros == nil {
+		r.macros = map[*MacroDef]*Symbol{}
+	}
+	s := r.macros[def]
+	if s == nil {
+		s = &Symbol{Name: def.Name, Kind: Macro, Macro: def}
+		r.macros[def] = s
+	}
+	return s
+}
+
+var predefinedDefs = map[string]*MacroDef{}
+
+func predefinedDef(p *builtin.Predefined) *MacroDef {
+	d := predefinedDefs[p.Name]
+	if d == nil {
+		d = &MacroDef{Name: p.Name, Value: "1", Predefined: p}
+		predefinedDefs[p.Name] = d
+	}
+	return d
 }
 
 func (r *resolver) errorf(t *syntax.Token, sev Severity, format string, args ...any) {
@@ -339,8 +399,14 @@ func (r *resolver) procDecl(d *syntax.ProcDecl) {
 	r.proc, r.locals = nil, nil
 }
 
-// ident resolves an identifier used in an expression.
+// ident resolves an identifier used in an expression. A preprocessor
+// symbol takes precedence over everything: icont substitutes it before
+// parsing.
 func (r *resolver) ident(t *syntax.Token) {
+	if s := r.macro(t); s != nil {
+		r.info.Uses[t] = s
+		return
+	}
 	if s := r.locals[t.Text]; s != nil {
 		r.info.Uses[t] = s
 		return
@@ -355,6 +421,12 @@ func (r *resolver) ident(t *syntax.Token) {
 	if r.p.Complete {
 		r.errorf(t, Warning, "%q: undeclared identifier", t.Text)
 	}
+}
+
+// isAssignOp reports whether k assigns to its left operand.
+func isAssignOp(k token.Kind) bool {
+	s := k.String()
+	return s == ":=:" || s == "<-" || s == "<->" || len(s) >= 2 && s[len(s)-2:] == ":="
 }
 
 func (r *resolver) expr(x syntax.Expr) {
@@ -373,6 +445,21 @@ func (r *resolver) expr(x syntax.Expr) {
 			r.errorf(x.Name, Error, "&%s: invalid keyword", x.Name.Text)
 		}
 		r.info.Keywords[x.Name] = k
+	case *syntax.Binary:
+		r.expr(x.X)
+		r.expr(x.Y)
+		// Assigning to a procedure, record constructor or built-in
+		// function is legal, but replaces it throughout the program:
+		// usually a mistake (e.g. "left := f" for "f.left := f").
+		if id, ok := x.X.(*syntax.Ident); ok && id.Name != nil && x.Op != nil && isAssignOp(x.Op.Kind) {
+			if s := r.info.Uses[id.Name]; s != nil {
+				switch s.Kind {
+				case Procedure, Record, Builtin:
+					what := map[Kind]string{Procedure: "procedure", Record: "record constructor", Builtin: "built-in function"}[s.Kind]
+					r.errorf(id.Name, Warning, "assignment to %s %q replaces it throughout the program", what, s.Name)
+				}
+			}
+		}
 	case *syntax.Field:
 		r.expr(x.X)
 		if x.Name != nil {

@@ -276,6 +276,19 @@ the same name, at the later one; a `global` may share a name with a
 procedure or record), `invalid keyword`, and, as warnings, undeclared
 identifiers (suppressed when some linked file cannot be found).
 
+Preprocessor symbols (`$define`, through `$include`d files, and the
+predefined `_UNIX` etc.) take precedence over everything, as icont
+substitutes them before parsing; each is in force from its `$define` (or
+the `$include`) to a `$undef` or redefinition.
+
+One check icont does not make: assigning to a procedure, record
+constructor or built-in function (`left := f`) is reported as a warning,
+since it replaces that function throughout the program. It is legal and
+occasionally deliberate (the IPL has idioms like `InitProc := 1` to make
+a procedure a no-op), but more often a mistake: in the corpus it fires
+136 times in 70 of 1,200 files, mostly variables named `name`, `pos` or
+`key` that silently replace those built-ins.
+
 Unlike icont, undeclared identifiers are reported in every procedure: the
 icont linker first discards procedures unreachable from `main` or an
 `invocable` declaration, so it reports only reachable ones.
@@ -283,3 +296,28 @@ icont linker first discards procedures unreachable from `main` or an
 Verified with `icont -s -u` on the 561 corpus files that stand alone (no
 `link`), comparing only reachable procedures, and ignoring graphics
 functions (the oracle's icont is built without graphics).
+
+### Programs
+
+There is no project file, so for a document the server assembles its
+program from: the document; the other `.icn` files in its directory,
+except other files defining `main` (other programs) when the document
+defines `main`; and, transitively, the files they `link`. Linked files
+are searched for, as source (`name.icn`), in the linking file's
+directory, the `ipath` initialization option, `$IPATH` and `$LPATH`. If a
+linked file is found only as ucode (`name.u1`) or not at all, the program
+is incomplete and undeclared identifiers are not reported. `$include`
+files are searched for in the including file's directory, `ipath` and
+`$LPATH`. Open documents take precedence over the disk.
+
+### Features
+
+Diagnostics (syntax, then semantic), hover, definition, references,
+document highlight, completion (`&` keywords, `x.` fields, identifiers in
+scope, built-ins, reserved words), signature help, rename (refused on a
+clash or capture, or if it would edit files outside the document's
+directory), document and workspace symbols, formatting.
+
+Hover for built-ins shows the one-line summary from the Icon sources and
+a link to the online reference, or the full reference entry if the pages
+have been fetched with `iconls fetch-docs`.

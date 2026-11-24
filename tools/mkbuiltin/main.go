@@ -4,6 +4,7 @@
 //   - function names and arities from src/h/fdefs.h (graphics functions are
 //     those inside its "#ifdef Graphics" sections);
 //   - keyword names from src/h/kdefs.h;
+//   - the preprocessor's predefined symbols from src/h/features.h;
 //   - one-line descriptions from the documentation strings in the runtime
 //     sources (src/runtime/*.r), e.g.
 //     "left(s1,i,s2) - pad s1 on right with s2 to length i."
@@ -63,6 +64,7 @@ var fallbacks = map[string]string{
 var (
 	fncDef  = regexp.MustCompile(`FncDef\((\w+),(\d+)\)|FncDefV\((\w+)\)`)
 	kDef    = regexp.MustCompile(`KDef\((\w+),`)
+	feature = regexp.MustCompile(`Feature\(\w+,\s*"(\w+)",\s*(?:"([^"]*)"|0)\)`)
 	docFunc = regexp.MustCompile(`^(\w+)\s*\(([^)]*)\)\s*(\{[^}]*\})?\s*-+\s*(.*)$`)
 	docKey  = regexp.MustCompile(`^&(\w+)\s*-+\s*(.*)$`)
 )
@@ -93,6 +95,7 @@ func main() {
 
 	fns := readFdefs(filepath.Join(*root, "src", "h", "fdefs.h"))
 	kws := readKdefs(filepath.Join(*root, "src", "h", "kdefs.h"))
+	feats := readFeatures(filepath.Join(*root, "src", "h", "features.h"))
 	fdocs, kdocs := readDocs(filepath.Join(*root, "src", "runtime"))
 
 	for _, f := range fns {
@@ -127,6 +130,10 @@ func main() {
 	b.WriteString("}\n\nvar keywords = []Keyword{\n")
 	for _, k := range kws {
 		fmt.Fprintf(&b, "\t{Name: %q, Summary: %q},\n", k.name, k.doc)
+	}
+	b.WriteString("}\n\nvar predefined = []Predefined{\n")
+	for _, f := range feats {
+		fmt.Fprintf(&b, "\t{Name: %q, Feature: %q},\n", f[0], f[1])
 	}
 	b.WriteString("}\n")
 	out, err := format.Source([]byte(b.String()))
@@ -226,6 +233,24 @@ func readKdefs(path string) []*kw {
 		kws = append(kws, &kw{name: m[1]})
 	}
 	return kws
+}
+
+// readFeatures returns the symbols ipp predefines (as "1") and the
+// &features string each corresponds to.
+func readFeatures(path string) [][2]string {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var out [][2]string
+	seen := map[string]bool{}
+	for _, m := range feature.FindAllStringSubmatch(string(src), -1) {
+		if !seen[m[1]] {
+			seen[m[1]] = true
+			out = append(out, [2]string{m[1], m[2]})
+		}
+	}
+	return out
 }
 
 // readDocs collects the documentation strings of the runtime sources: runs
