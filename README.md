@@ -45,6 +45,17 @@ indentation and spacing, with gofmt-style closing braces and alignment of
 trailing comments and case clauses. It never changes the token sequence
 icont sees, and refuses files with syntax errors. See `docs/design.md`.
 
+## Using iconls
+
+```sh
+go install ./cmd/iconls
+```
+
+`iconls` is a language server: editors start it and talk to it over
+standard input and output. So far it provides syntax-error diagnostics as
+you type, an outline (document symbols), and formatting with icfmt.
+`iconls -log file` writes a server log for debugging.
+
 ## Development
 
 ```sh

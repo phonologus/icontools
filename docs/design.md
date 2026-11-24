@@ -239,3 +239,24 @@ markers are full-line comments, this cannot split a token or a line.
 
 Not handled: inactive `$ifdef` regions (files whose preprocessor branches
 do not parse as a whole are refused).
+
+## Language server (`iconls`)
+
+- **Transport**: LSP base protocol (Content-Length framing, JSON-RPC 2.0)
+  over stdin/stdout, implemented with the standard library
+  (`internal/lsp/jsonrpc.go`). Messages are handled in order on one
+  goroutine; documents are small enough that reparsing on every change is
+  instantaneous.
+- **Sync**: full-document (`TextDocumentSyncKind.Full`). Each change
+  replaces the text, which is reparsed; diagnostics are published with the
+  document version.
+- **Positions**: UTF-16 code units by default, as LSP requires; UTF-8
+  byte offsets if the client offers `utf-8` in
+  `general.positionEncodings` (LSP 3.17).
+- **Diagnostics**: lexical and syntax errors, each spanning the token at
+  which it was detected.
+- **Document symbols**: procedures (with parameters, locals, statics),
+  records (with fields), globals and links; hierarchical when the client
+  supports it, else flattened.
+- **Formatting**: icfmt; a single edit covering just the changed lines.
+  Files with syntax errors are not formatted.
